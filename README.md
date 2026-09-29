@@ -55,7 +55,7 @@ git commit -m "Describe your change"
 git push -u origin my-feature
 ```
 
-Then open a Pull Request on GitHub. CI (lint, typecheck, build, Docker build) must pass before you can merge.
+Then open a Pull Request on GitHub. CI (lint, typecheck, build, Docker build) runs on every PR and must pass before you can merge.
 
 ## Where things are
 
