@@ -1,61 +1,74 @@
 # CS160 Team 3 — OFS
 
-Next.js 16 (App Router, TypeScript, Tailwind v4) + Supabase.
+Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so you don't need Node installed.
 
-## Quick start (Docker, recommended)
+## First-time setup
 
-Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+**1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)** and open it.
 
-```bash
-cp .env.example .env.local   # then fill in the Supabase URL + publishable key
-docker compose up --build    # http://localhost:3000
-```
-
-Code changes hot-reload. Stop with `Ctrl+C` or `docker compose down`.
-After changing `package.json`, rebuild with `docker compose up --build --renew-anon-volumes`.
-
-## Without Docker
-
-Requires Node 24 (`nvm use` picks it up from `.nvmrc`).
+**2. Clone the repo and create your env file:**
 
 ```bash
-npm install
+git clone https://github.com/RonCodes88/CS160-Team3-OFS.git
+cd CS160-Team3-OFS
 cp .env.example .env.local
-npm run dev
 ```
 
-## Supabase
+**3. Fill in `.env.local`** with the Supabase URL and publishable key (ask the team, or copy them from the Supabase dashboard → Project Settings → API Keys).
 
-- **Shared cloud project (default):** get the URL and publishable key from the Supabase dashboard → Project Settings → API Keys, and put them in `.env.local`.
-- **Local Supabase (optional):** `npx supabase start` runs a full local stack in Docker and prints a local URL + publishable key to put in `.env.local`. Run the app with `npm run dev` in this mode; from inside the app container, `localhost` points at the container, not your machine.
-- Schema changes live in `supabase/migrations/` (`npx supabase migration new <name>`).
-
-Clients live in `src/lib/supabase/`:
-
-| File        | Use in                                               |
-| ----------- | ---------------------------------------------------- |
-| `client.ts` | Client Components (`"use client"`)                   |
-| `server.ts` | Server Components, Server Actions, Route Handlers    |
-| `proxy.ts`  | Used by `src/proxy.ts` to refresh the auth session   |
-
-## Scripts
-
-| Command             | What it does          |
-| ------------------- | --------------------- |
-| `npm run dev`       | Dev server            |
-| `npm run lint`      | ESLint                |
-| `npm run typecheck` | TypeScript check      |
-| `npm run build`     | Production build      |
-
-## Workflow
-
-`main` is protected: open a PR from a feature branch. CI (`.github/workflows/ci.yml`) runs lint, typecheck, build, and a Docker build, and it must pass before merging.
-
-## Production image
+**4. Start the app:**
 
 ```bash
-docker build --target runner -t ofs .
-docker run -p 3000:3000 --env-file .env.local ofs
+docker compose up --build
 ```
 
-`NEXT_PUBLIC_*` variables are inlined into client code at build time, so a real deploy needs them available during `docker build`.
+Open **http://localhost:3000**. The page should say `Supabase: Connected`.
+
+## Everyday use
+
+| What                  | Command                                |
+| --------------------- | -------------------------------------- |
+| Start the app         | `docker compose up`                    |
+| Stop the app          | `Ctrl+C`, then `docker compose down`   |
+| Lint                  | `docker compose exec web npm run lint` |
+| Typecheck             | `docker compose exec web npm run typecheck` |
+| Add a package         | `docker compose exec web npm install <package>` |
+| Supabase CLI          | `docker compose exec web npx supabase <command>` |
+
+Code changes reload automatically in the browser. Commands with `exec` need the app running (`docker compose up`) in another terminal.
+
+**After pulling changes that touch `package.json`**, rebuild once:
+
+```bash
+docker compose up --build --renew-anon-volumes
+```
+
+## Making changes
+
+`main` is protected, so you can't push to it directly.
+
+```bash
+git checkout -b my-feature
+# ...make changes, then:
+git add .
+git commit -m "Describe your change"
+git push -u origin my-feature
+```
+
+Then open a Pull Request on GitHub. CI (lint, typecheck, build, Docker build) must pass before you can merge.
+
+## Where things are
+
+| Path                         | What                                                    |
+| ---------------------------- | ------------------------------------------------------- |
+| `src/app/`                   | Pages and layouts                                       |
+| `src/lib/supabase/client.ts` | Supabase client for Client Components (`"use client"`)  |
+| `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
+| `src/proxy.ts`               | Refreshes the Supabase login session on each request    |
+| `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
+
+## Troubleshooting
+
+- **`Supabase: Not configured`**: `.env.local` is missing or empty. Fill it in, then restart with `docker compose up`.
+- **Port 3000 already in use**: stop whatever else is running on 3000, or change `"3000:3000"` to `"3001:3000"` in `compose.yaml` and use http://localhost:3001.
+- **Something is weird after pulling**: reset the container with `docker compose down` and then `docker compose up --build --renew-anon-volumes`.
