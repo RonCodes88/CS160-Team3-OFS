@@ -26,10 +26,44 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+
+      # Reuse Next.js's incremental build cache between runs.
+      - uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'public/**', '*.ts', '*.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - run: npm run build
+
+  # The check job already proves the app builds. The Docker image can only
+  # break when these files change, so skip the slow Docker build otherwise.
+  # A job skipped via `if` still counts as passing for required checks.
+  changes:
+    name: Detect Docker-relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The PR merge commit plus its first parent (the base branch).
+          fetch-depth: 2
+
+      - id: filter
+        run: |
+          if git diff --name-only HEAD^1 HEAD \
+            | grep -qE '^(Dockerfile|\.dockerignore|compose\.yaml|package(-lock)?\.json|next\.config\.ts|\.nvmrc|\.github/workflows/)'; then
+            echo "docker=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docker=false" >> "$GITHUB_OUTPUT"
+          fi
 
   docker:
     name: Docker build
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
