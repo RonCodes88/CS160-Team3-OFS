@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.github
+.env*
+!.env.example
+supabase/.temp
+npm-debug.log*
+Dockerfile
+compose.yaml
+.dockerignore
+README.md

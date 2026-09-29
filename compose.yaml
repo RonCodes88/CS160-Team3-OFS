@@ -1,0 +1,18 @@
+services:
+  web:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      # Reliable file watching on Docker Desktop bind mounts.
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - .:/app
+      # Keep the container's node_modules and build cache separate from the host's.
+      - /app/node_modules
+      - /app/.next
