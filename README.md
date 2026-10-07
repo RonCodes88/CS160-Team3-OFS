@@ -32,6 +32,7 @@ Open **http://localhost:3000**. The page should say `Supabase: Connected`.
 | Stop the app          | `Ctrl+C`, then `docker compose down`   |
 | Lint                  | `docker compose exec web npm run lint` |
 | Typecheck             | `docker compose exec web npm run typecheck` |
+| Unit tests            | `docker compose exec web npm test`     |
 | Add a package         | `docker compose exec web npm install <package>` |
 | Supabase CLI          | `docker compose exec web npx supabase <command>` |
 
@@ -55,7 +56,7 @@ git commit -m "Describe your change"
 git push -u origin my-feature
 ```
 
-Then open a Pull Request on GitHub. CI (lint, typecheck, build, Docker build) runs on every PR and must pass before you can merge.
+Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Docker build) runs on every PR and must pass before you can merge.
 
 ## Where things are
 
