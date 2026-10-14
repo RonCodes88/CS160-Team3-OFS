@@ -83,6 +83,27 @@ PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enab
 - **Local database for DB tests:** `npx supabase start` runs Postgres with every migration applied. `npx supabase db reset` re-applies them from scratch. Copy the API URL and secret key from `npx supabase status` into `.env.test.local` as `SUPABASE_TEST_URL` and `SUPABASE_TEST_SECRET_KEY`. Then `npm test` also runs the `*.db.test.ts` files.
 - **Schema changes:** add a new migration (`npx supabase migration new <name>`). Never edit one that's already applied.
 
+## Dependencies
+
+Ask the team before adding a new package. All of these are installed by `npm ci` (or the Docker build).
+
+| Package                                         | Used for                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `next`, `react`, `react-dom`                    | App framework (pages, API route handlers)                                |
+| `@supabase/supabase-js`, `@supabase/ssr`        | PostgreSQL (Supabase) client on the server and in the browser            |
+| `@node-rs/argon2`                               | Argon2id password hashing (prebuilt binaries, no compiler needed)        |
+| `stripe`                                        | Server-side Stripe: PaymentIntents, refunds/voids, webhook signature checks |
+| `@stripe/stripe-js`, `@stripe/react-stripe-js`  | Stripe Payment Element in the checkout page, so card data never touches OFS |
+| `@mapbox/search-js-core`                        | Mapbox Geocoding v6: turn delivery addresses into coordinates            |
+| `@mapbox/mapbox-sdk`                            | Mapbox Directions and Optimization APIs for robot routes                 |
+| `mapbox-gl`, `react-map-gl`                     | Interactive map for delivery tracking (import from `react-map-gl/mapbox`) |
+| `lucide-react`                                  | Icons                                                                    |
+| `tailwindcss`                                   | Styling (dev)                                                            |
+| `vitest`                                        | Unit and component tests: `npm test` (dev)                               |
+| `@playwright/test`                              | End-to-end browser tests (dev); run `npx playwright install` once for browsers |
+| `eslint`, `typescript`                          | Lint and typecheck: `npm run lint`, `npm run typecheck` (dev)            |
+| `supabase`                                      | Supabase CLI for local DB and migrations (dev)                           |
+
 ## Troubleshooting
 
 - **`Supabase: Not configured`**: `.env.local` is missing or empty. Fill it in, then restart with `docker compose up`.
