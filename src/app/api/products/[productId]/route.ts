@@ -5,9 +5,10 @@ export async function GET(
     { params }: { params: Promise<{ productId: string }> },
 ) {
     const { productId } = await params;
-    const products = await listProducts();
+    const product = (await listProducts()).find(
+        (item) => item.id === productId && item.inStock,
+    );
 
-    const product = products.find((item) => item.id === productId);
 
     if (!product) {
         return Response.json(

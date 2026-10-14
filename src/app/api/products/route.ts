@@ -9,9 +9,7 @@ export async function GET(request: Request) {
         category: url.searchParams.get("category") ?? undefined,
     });
 
-    const products = await listProducts(query);
+    const products = (await listProducts(query)).filter((product) => product.inStock);
 
-    return Response.json({
-        products,
-    });
+    return Response.json({ products });
 }
