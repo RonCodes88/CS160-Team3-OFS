@@ -14,7 +14,9 @@ cd CS160-Team3-OFS
 cp .env.example .env.local
 ```
 
-**3. Fill in `.env.local`** with the Supabase URL and publishable key (ask the team, or copy them from the Supabase dashboard → Project Settings → API Keys).
+**3. Fill in `.env.local`.** Each variable in `.env.example` has a comment saying where to get it (Supabase, Stripe **test mode**, Mapbox), or ask the team. Never commit `.env.local`.
+
+The server checks every variable when it starts (`src/lib/env.ts`). In development it prints a warning listing anything missing or malformed and still starts. A production server exits instead. Stripe live keys (`sk_live_`/`pk_live_`) and secret `sk.` Mapbox tokens in `NEXT_PUBLIC_` variables are always rejected.
 
 **4. Start the app:**
 
