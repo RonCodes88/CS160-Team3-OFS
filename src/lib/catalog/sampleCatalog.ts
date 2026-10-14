@@ -127,8 +127,11 @@ export async function listProducts({ q, category }: ProductQuery = {}): Promise<
   return SAMPLE_PRODUCT_ROWS.filter(
     (p) =>
       p.is_active &&
+      p.stock_quantity > 0 &&
       categoryIds.has(p.category_id) &&
-      (!term || p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term)),
+      (!term ||
+        p.name.toLowerCase().includes(term) ||
+        p.description.toLowerCase().includes(term)),
   )
     .map(toProduct)
     .sort((a, b) => a.name.localeCompare(b.name));
