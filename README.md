@@ -22,7 +22,7 @@ cp .env.example .env.local
 docker compose up --build
 ```
 
-Open **http://localhost:3000**. The page should say `Supabase: Connected`.
+Open **http://localhost:3000**. The footer should say `Supabase: Connected · PostGIS <version>` (see [Database](#database)).
 
 ## Everyday use
 
@@ -67,6 +67,21 @@ Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Dock
 | `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
 | `src/proxy.ts`               | Refreshes the Supabase login session on each request    |
 | `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
+
+## Database
+
+PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enabled by a migration in the `extensions` schema, and `extensions` is on the search path, so `geography(Point, 4326)` and `ST_*` functions work without a prefix. Run the commands below inside Docker (`docker compose exec web npx supabase ...`) or with Node installed.
+
+- **Team access:** the project owner invites teammates from the Supabase dashboard → Organization settings → Team.
+- **Health check:** the footer shows `Supabase: Connected · PostGIS <version>` when the server can run a query with `SUPABASE_SECRET_KEY` (it calls `public.db_health()`). If it says `db_health() is missing`, the hosted database is behind on migrations.
+- **Apply migrations to the hosted project** (one person, after a migration PR merges):
+  ```bash
+  npx supabase login
+  npx supabase link --project-ref <project-ref>   # from the dashboard URL
+  npx supabase db push
+  ```
+- **Local database for DB tests:** `npx supabase start` runs Postgres with every migration applied. `npx supabase db reset` re-applies them from scratch. Copy the API URL and secret key from `npx supabase status` into `.env.test.local` as `SUPABASE_TEST_URL` and `SUPABASE_TEST_SECRET_KEY`. Then `npm test` also runs the `*.db.test.ts` files.
+- **Schema changes:** add a new migration (`npx supabase migration new <name>`). Never edit one that's already applied.
 
 ## Troubleshooting
 
