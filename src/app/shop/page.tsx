@@ -4,7 +4,7 @@ import { ShopCartProvider } from "@/components/shop/ShopCart";
 import { ShopFilters } from "@/components/shop/ShopFilters";
 import { StickyTag } from "@/components/ui/StickyTag";
 import { parseShopQuery } from "@/lib/catalog/query";
-import { listCategories, listProducts } from "@/lib/catalog/sampleCatalog";
+import { getCatalogCategories, searchCatalogProducts } from "@/lib/catalog/service";
 
 export const metadata: Metadata = { title: "Shop — OFS" };
 
@@ -14,8 +14,9 @@ export default async function Page({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const query = parseShopQuery(await searchParams);
-  // TODO(#13): fetch from GET /api/categories and GET /api/products instead.
-  const [categories, products] = await Promise.all([listCategories(), listProducts(query)]);
+  // Same data as GET /api/categories and GET /api/products, read directly so
+  // the server doesn't make an HTTP request to itself.
+  const [categories, products] = await Promise.all([getCatalogCategories(), searchCatalogProducts(query)]);
   const categoryName = categories.find((c) => c.slug === query.category)?.name;
 
   return (

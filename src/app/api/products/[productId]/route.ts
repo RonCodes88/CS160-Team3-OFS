@@ -1,13 +1,11 @@
-import { listProducts } from "@/lib/catalog/sampleCatalog";
+import { getCatalogProduct } from "@/lib/catalog/service";
 
 export async function GET(
     _request: Request,
     { params }: { params: Promise<{ productId: string }> },
 ) {
     const { productId } = await params;
-    const product = (await listProducts()).find(
-        (item) => item.id === productId && item.inStock,
-    );
+    const product = await getCatalogProduct(productId);
 
 
     if (!product) {
