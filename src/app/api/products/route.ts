@@ -1,5 +1,5 @@
 import { parseShopQuery } from "@/lib/catalog/query";
-import { listProducts } from "@/lib/catalog/sampleCatalog";
+import { searchCatalogProducts } from "@/lib/catalog/service";
 
 export async function GET(request: Request) {
     const url = new URL(request.url);
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
         category: url.searchParams.get("category") ?? undefined,
     });
 
-    const products = (await listProducts(query)).filter((product) => product.inStock);
+    const products = await searchCatalogProducts(query);
 
     return Response.json({ products });
 }

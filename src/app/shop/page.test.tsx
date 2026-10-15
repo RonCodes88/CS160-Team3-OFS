@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import Page from "./page";
-import * as catalog from "@/lib/catalog/sampleCatalog";
+import { GET as getProducts } from "@/app/api/products/route";
+import * as catalog from "@/lib/catalog/service";
+import type { CatalogProduct } from "@/lib/catalog/types";
 
 // Renders the real page (server component plus the client components' first
 // render) to HTML, the same markup the browser receives before hydration.
@@ -10,9 +12,9 @@ async function render(params: { [key: string]: string | string[] | undefined } =
 }
 
 describe("/shop page", () => {
-  it("shows every active product with price, weight, and an add button", async () => {
+  it("shows every active, in-stock product with price, weight, and an add button", async () => {
     const html = await render();
-    expect(html).toContain("19 products");
+    expect(html).toContain("18 products");
     expect(html).toContain("Whole Milk");
     expect(html).toContain("$4.99");
     expect(html).toContain("8.60 lb");
@@ -20,11 +22,22 @@ describe("/shop page", () => {
     expect(html).not.toContain("Discontinued Granola");
   });
 
-  it("disables the add button for out-of-stock products", async () => {
+  it("hides out-of-stock products, like the API", async () => {
     const html = await render({ q: "cheddar" });
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Add Sharp Cheddar to cart"/);
-    expect(html).toContain("Out of stock");
+    expect(html).toContain("0 products");
+    expect(html).not.toContain("Sharp Cheddar");
   });
+
+  it.each<Record<string, string>>([{}, { q: "bag" }, { category: "dairy-eggs" }, { q: "milk", category: "dairy-eggs" }])(
+    "shows the same products as GET /api/products for %o",
+    async (params) => {
+      const res = await getProducts(new Request(`http://localhost/api/products?${new URLSearchParams(params)}`));
+      const { products } = (await res.json()) as { products: CatalogProduct[] };
+      const html = await render(params);
+      expect(html).toContain(`${products.length} ${products.length === 1 ? "product" : "products"}`);
+      for (const p of products) expect(html).toContain(`aria-label="Add ${p.name} to cart"`);
+    },
+  );
 
   it("filters by search and keeps the search in the box", async () => {
     const html = await render({ q: "banana" });
@@ -59,11 +72,11 @@ describe("/shop page", () => {
 
   it("ignores a malformed category instead of failing", async () => {
     const html = await render({ category: "../etc" });
-    expect(html).toContain("19 products");
+    expect(html).toContain("18 products");
   });
 
   it("lets catalog errors reach the error boundary", async () => {
-    vi.spyOn(catalog, "listProducts").mockRejectedValueOnce(new Error("catalog down"));
+    vi.spyOn(catalog, "searchCatalogProducts").mockRejectedValueOnce(new Error("catalog down"));
     await expect(render()).rejects.toThrow("catalog down");
   });
 });

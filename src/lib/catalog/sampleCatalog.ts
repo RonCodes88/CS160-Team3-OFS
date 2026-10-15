@@ -1,7 +1,6 @@
-// Stand-in for the catalog API (#13) until it lands. Rows mirror the
-// categories and products tables; listCategories and listProducts return the
-// shapes the storefront expects from GET /api/categories and
-// GET /api/products. Replace their bodies with API calls once #13 merges.
+// Stand-in for the categories and products tables until the catalog reads
+// from Supabase. listProducts includes out-of-stock products; service.ts
+// applies the public in-stock rule on top.
 
 import type { CatalogCategory, CatalogProduct, ProductQuery } from "./types";
 
