@@ -14,7 +14,9 @@ cd CS160-Team3-OFS
 cp .env.example .env.local
 ```
 
-**3. Fill in `.env.local`** with the Supabase URL and publishable key (ask the team, or copy them from the Supabase dashboard → Project Settings → API Keys).
+**3. Fill in `.env.local`.** Each variable in `.env.example` has a comment saying where to get it (Supabase, Stripe **test mode**, Mapbox), or ask the team. Never commit `.env.local`.
+
+The server checks every variable when it starts (`src/lib/env.ts`). In development it prints a warning listing anything missing or malformed and still starts. A production server exits instead. Stripe live keys (`sk_live_`/`pk_live_`) and secret `sk.` Mapbox tokens in `NEXT_PUBLIC_` variables are always rejected.
 
 **4. Start the app:**
 
@@ -22,7 +24,7 @@ cp .env.example .env.local
 docker compose up --build
 ```
 
-Open **http://localhost:3000**. The page should say `Supabase: Connected`.
+Open **http://localhost:3000**. The footer should say `Supabase: Connected · PostGIS <version>` (see [Database](#database)).
 
 ## Everyday use
 
@@ -67,6 +69,42 @@ Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Dock
 | `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
 | `src/proxy.ts`               | Refreshes the Supabase login session on each request    |
 | `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
+
+## Database
+
+PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enabled by a migration in the `extensions` schema, and `extensions` is on the search path, so `geography(Point, 4326)` and `ST_*` functions work without a prefix. Run the commands below inside Docker (`docker compose exec web npx supabase ...`) or with Node installed.
+
+- **Team access:** the project owner invites teammates from the Supabase dashboard → Organization settings → Team.
+- **Health check:** the footer shows `Supabase: Connected · PostGIS <version>` when the server can run a query with `SUPABASE_SECRET_KEY` (it calls `public.db_health()`). If it says `db_health() is missing`, the hosted database is behind on migrations.
+- **Apply migrations to the hosted project** (one person, after a migration PR merges):
+  ```bash
+  npx supabase login
+  npx supabase link --project-ref <project-ref>   # from the dashboard URL
+  npx supabase db push
+  ```
+- **Local database for DB tests:** `npx supabase start` runs Postgres with every migration applied. `npx supabase db reset` re-applies them from scratch. Copy the API URL and secret key from `npx supabase status` into `.env.test.local` as `SUPABASE_TEST_URL` and `SUPABASE_TEST_SECRET_KEY`. Then `npm test` also runs the `*.db.test.ts` files.
+- **Schema changes:** add a new migration (`npx supabase migration new <name>`). Never edit one that's already applied.
+
+## Dependencies
+
+Ask the team before adding a new package. All of these are installed by `npm ci` (or the Docker build).
+
+| Package                                         | Used for                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `next`, `react`, `react-dom`                    | App framework (pages, API route handlers)                                |
+| `@supabase/supabase-js`, `@supabase/ssr`        | PostgreSQL (Supabase) client on the server and in the browser            |
+| `@node-rs/argon2`                               | Argon2id password hashing (prebuilt binaries, no compiler needed)        |
+| `stripe`                                        | Server-side Stripe: PaymentIntents, refunds/voids, webhook signature checks |
+| `@stripe/stripe-js`, `@stripe/react-stripe-js`  | Stripe Payment Element in the checkout page, so card data never touches OFS |
+| `@mapbox/search-js-core`                        | Mapbox Geocoding v6: turn delivery addresses into coordinates            |
+| `@mapbox/mapbox-sdk`                            | Mapbox Directions and Optimization APIs for robot routes                 |
+| `mapbox-gl`, `react-map-gl`                     | Interactive map for delivery tracking (import from `react-map-gl/mapbox`) |
+| `lucide-react`                                  | Icons                                                                    |
+| `tailwindcss`                                   | Styling (dev)                                                            |
+| `vitest`                                        | Unit and component tests: `npm test` (dev)                               |
+| `@playwright/test`                              | End-to-end browser tests (dev); run `npx playwright install` once for browsers |
+| `eslint`, `typescript`                          | Lint and typecheck: `npm run lint`, `npm run typecheck` (dev)            |
+| `supabase`                                      | Supabase CLI for local DB and migrations (dev)                           |
 
 ## Troubleshooting
 
