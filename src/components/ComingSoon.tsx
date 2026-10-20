@@ -25,28 +25,3 @@ export function ComingSoon({ title, description, children }: Props) {
     </section>
   );
 }
-
-const inputClass =
-  "h-12 w-full rounded-wobbly border-2 border-pencil bg-white px-4 text-lg placeholder:text-pencil/40 focus:border-pen focus:outline-none focus:ring-2 focus:ring-pen/20 disabled:opacity-60";
-
-/** Visual-only auth form. Inputs are disabled until auth is implemented. */
-export function AuthFormPlaceholder({ submitLabel }: { submitLabel: string }) {
-  return (
-    <form className="mt-6 space-y-4" aria-describedby="auth-note">
-      <label className="block">
-        <span className="text-lg">Email</span>
-        <input type="email" disabled placeholder="you@example.com" className={inputClass} />
-      </label>
-      <label className="block">
-        <span className="text-lg">Password</span>
-        <input type="password" disabled placeholder="••••••••" className={inputClass} />
-      </label>
-      <Button type="submit" disabled variant="secondary" className="w-full">
-        {submitLabel}
-      </Button>
-      <p id="auth-note" className="text-base text-pencil/70">
-        Auth isn&apos;t wired up yet. This form is a placeholder.
-      </p>
-    </form>
-  );
-}

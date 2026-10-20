@@ -83,6 +83,7 @@ PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enab
   npx supabase db push
   ```
 - **Local database for DB tests:** `npx supabase start` runs Postgres with every migration applied. `npx supabase db reset` re-applies them from scratch. Copy the API URL and secret key from `npx supabase status` into `.env.test.local` as `SUPABASE_TEST_URL` and `SUPABASE_TEST_SECRET_KEY`. Then `npm test` also runs the `*.db.test.ts` files.
+- **Demo accounts:** `npx supabase db reset` also loads `supabase/seed.sql`: the sample catalog plus `customer.test`, `employee.test`, `manager.test`, and `vehicle.test` `@ofs.local`, all with the password `ChangeMe123!`. Local and demo only.
 - **Schema changes:** add a new migration (`npx supabase migration new <name>`). Never edit one that's already applied.
 
 ## Dependencies

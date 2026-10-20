@@ -1,4 +1,4 @@
-// Placeholder feature routes. Each points to a "coming soon" stub until built.
+// Main navigation. Pages that are not built yet show a "coming soon" stub.
 export const navLinks = [
   { href: "/shop", label: "Shop" },
   { href: "/cart", label: "Cart" },

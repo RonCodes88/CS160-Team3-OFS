@@ -20,7 +20,7 @@ const PRODUCT_ID = "3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41";
 const USER_ID = "b2f7c1d0-1111-4222-8333-944455556666";
 
 function signInAs(role: Role | null) {
-  vi.mocked(getSessionUser).mockResolvedValue(role ? { id: USER_ID, role } : null);
+  vi.mocked(getSessionUser).mockResolvedValue(role ? { id: USER_ID, email: "staff@ofs.test", role } : null);
 }
 
 function get(path: string) {
