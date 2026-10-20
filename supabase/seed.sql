@@ -61,3 +61,18 @@ on conflict (lower(email)) do update set
   password_hash = excluded.password_hash,
   role = excluded.role,
   status = excluded.status;
+
+-- The demo robot, signed in as vehicle.test, parked at the store.
+insert into public.vehicles (user_id, status, battery_percent, last_location, last_update_at)
+select u.id, 'AVAILABLE', 100, extensions.st_point(-121.8811, 37.3352, 4326)::extensions.geography, now()
+from public.users u
+where u.email = 'vehicle.test@ofs.local'
+on conflict (user_id) do nothing;
+
+-- A default delivery address for customer.test (San Pedro Square, Downtown San Jose).
+insert into public.addresses (customer_id, label, line_1, city, state, postal_code, location, is_default)
+select u.id, 'Home', '87 N San Pedro St', 'San Jose', 'CA', '95110',
+       extensions.st_point(-121.8945, 37.3361, 4326)::extensions.geography, true
+from public.users u
+where u.email = 'customer.test@ofs.local'
+  and not exists (select 1 from public.addresses a where a.customer_id = u.id);
