@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GET as getCategories } from "@/app/api/categories/route";
 import { GET as getProduct } from "./[productId]/route";
 import { GET as getProducts } from "./route";
 import { SAMPLE_PRODUCT_ROWS } from "@/lib/catalog/sampleCatalog";
 import type { CatalogCategory, CatalogProduct } from "@/lib/catalog/types";
+
+// Unit tests read the in-memory catalog; catalog.db.test.ts covers the real queries.
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/catalog/db", async () => (await import("@/lib/catalog/sampleCatalog")).sampleCatalogDb);
 
 const idOf = (name: string) => SAMPLE_PRODUCT_ROWS.find((p) => p.name === name)!.id;
 
