@@ -48,12 +48,16 @@ describe("getSessionUser", () => {
     expect(builder.gt).toHaveBeenCalledWith("expires_at", expect.any(String));
   });
 
-  it("returns the user id and role for an active user", async () => {
+  it("returns the user id, email, and role for an active user", async () => {
     const { db } = fakeDb({
-      data: { user: { id: "u1", role: "EMPLOYEE", status: "ACTIVE" } },
+      data: { user: { id: "u1", email: "e@ofs.test", role: "EMPLOYEE", status: "ACTIVE" } },
       error: null,
     });
-    expect(await getSessionUser(requestWithToken("t"), db)).toEqual({ id: "u1", role: "EMPLOYEE" });
+    expect(await getSessionUser(requestWithToken("t"), db)).toEqual({
+      id: "u1",
+      email: "e@ofs.test",
+      role: "EMPLOYEE",
+    });
   });
 
   it.each(["DISABLED", "LOCKED"])("returns null for a %s user", async (status) => {

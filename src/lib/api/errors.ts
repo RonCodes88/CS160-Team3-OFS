@@ -3,11 +3,19 @@ export type ErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
+  | "EMAIL_TAKEN"
+  | "INVALID_CREDENTIALS"
+  | "RATE_LIMITED"
   | "INTERNAL_ERROR";
 
 /** Every API error uses the shape `{ error: { code, message } }`. */
-export function errorResponse(status: number, code: ErrorCode, message: string): Response {
-  return Response.json({ error: { code, message } }, { status });
+export function errorResponse(
+  status: number,
+  code: ErrorCode,
+  message: string,
+  headers?: HeadersInit,
+): Response {
+  return Response.json({ error: { code, message } }, { status, headers });
 }
 
 /** Logs the real error server-side and returns a generic 500 to the client. */

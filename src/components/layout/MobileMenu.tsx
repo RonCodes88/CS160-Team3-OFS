@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/Button";
 import { authLinks, navLinks } from "./navLinks";
 
-export function MobileMenu() {
+export function MobileMenu({ userEmail }: { userEmail: string | null }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
@@ -46,12 +47,21 @@ export function MobileMenu() {
             ))}
           </ul>
           <div className="mt-6 flex flex-col gap-3 border-t-2 border-dashed border-pencil pt-6">
-            <Button href={authLinks.login} variant="secondary" onClick={close}>
-              Log in
-            </Button>
-            <Button href={authLinks.register} onClick={close}>
-              Sign up
-            </Button>
+            {userEmail ? (
+              <>
+                <p className="truncate text-lg">Signed in as {userEmail}</p>
+                <LogoutButton onDone={close} />
+              </>
+            ) : (
+              <>
+                <Button href={authLinks.login} variant="secondary" onClick={close}>
+                  Log in
+                </Button>
+                <Button href={authLinks.register} onClick={close}>
+                  Sign up
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

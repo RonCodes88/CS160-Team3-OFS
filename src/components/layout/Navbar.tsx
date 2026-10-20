@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { Bot } from "lucide-react";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/Button";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { MobileMenu } from "./MobileMenu";
 import { authLinks, navLinks } from "./navLinks";
 
-export function Navbar() {
+export async function Navbar() {
+  const user = await getCurrentUser();
+
   return (
     <header className="relative z-20 border-b-2 border-dashed border-pencil bg-paper/90">
       <nav
@@ -32,13 +36,24 @@ export function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Button href={authLinks.login} variant="secondary">
-            Log in
-          </Button>
-          <Button href={authLinks.register}>Sign up</Button>
+          {user ? (
+            <>
+              <span className="max-w-48 truncate text-lg" title={user.email}>
+                {user.email}
+              </span>
+              <LogoutButton />
+            </>
+          ) : (
+            <>
+              <Button href={authLinks.login} variant="secondary">
+                Log in
+              </Button>
+              <Button href={authLinks.register}>Sign up</Button>
+            </>
+          )}
         </div>
 
-        <MobileMenu />
+        <MobileMenu userEmail={user?.email ?? null} />
       </nav>
     </header>
   );

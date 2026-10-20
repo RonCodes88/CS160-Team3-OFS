@@ -50,12 +50,13 @@ on conflict (sku) do update set
   is_active = excluded.is_active,
   updated_at = now();
 
+-- password_hash is an Argon2id hash of ChangeMe123! (src/lib/auth/password.ts).
 insert into public.users (email, password_hash, role, status)
 values
-  ('customer.test@ofs.local', extensions.crypt('ChangeMe123!', extensions.gen_salt('bf')), 'CUSTOMER', 'ACTIVE'),
-  ('employee.test@ofs.local', extensions.crypt('ChangeMe123!', extensions.gen_salt('bf')), 'EMPLOYEE', 'ACTIVE'),
-  ('manager.test@ofs.local', extensions.crypt('ChangeMe123!', extensions.gen_salt('bf')), 'MANAGER', 'ACTIVE'),
-  ('vehicle.test@ofs.local', extensions.crypt('ChangeMe123!', extensions.gen_salt('bf')), 'VEHICLE', 'ACTIVE')
+  ('customer.test@ofs.local', '$argon2id$v=19$m=19456,t=2,p=1$G0pjtSw4WIbV+e7B+W/zUg$oI/iKPBts8qU2gc+4TQYdkQcfishx9t2Fe0ua0zilxU', 'CUSTOMER', 'ACTIVE'),
+  ('employee.test@ofs.local', '$argon2id$v=19$m=19456,t=2,p=1$G0pjtSw4WIbV+e7B+W/zUg$oI/iKPBts8qU2gc+4TQYdkQcfishx9t2Fe0ua0zilxU', 'EMPLOYEE', 'ACTIVE'),
+  ('manager.test@ofs.local', '$argon2id$v=19$m=19456,t=2,p=1$G0pjtSw4WIbV+e7B+W/zUg$oI/iKPBts8qU2gc+4TQYdkQcfishx9t2Fe0ua0zilxU', 'MANAGER', 'ACTIVE'),
+  ('vehicle.test@ofs.local', '$argon2id$v=19$m=19456,t=2,p=1$G0pjtSw4WIbV+e7B+W/zUg$oI/iKPBts8qU2gc+4TQYdkQcfishx9t2Fe0ua0zilxU', 'VEHICLE', 'ACTIVE')
 on conflict (lower(email)) do update set
   password_hash = excluded.password_hash,
   role = excluded.role,
