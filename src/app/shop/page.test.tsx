@@ -5,6 +5,10 @@ import { GET as getProducts } from "@/app/api/products/route";
 import * as catalog from "@/lib/catalog/service";
 import type { CatalogProduct } from "@/lib/catalog/types";
 
+// Unit tests read the in-memory catalog; catalog.db.test.ts covers the real queries.
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/catalog/db", async () => (await import("@/lib/catalog/sampleCatalog")).sampleCatalogDb);
+
 // Renders the real page (server component plus the client components' first
 // render) to HTML, the same markup the browser receives before hydration.
 async function render(params: { [key: string]: string | string[] | undefined } = {}) {

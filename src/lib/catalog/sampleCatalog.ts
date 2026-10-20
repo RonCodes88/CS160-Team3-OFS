@@ -1,8 +1,10 @@
-// Stand-in for the categories and products tables until the catalog reads
-// from Supabase. listProducts includes out-of-stock products; service.ts
-// applies the public in-stock rule on top.
+// In-memory copy of the seeded categories and products (supabase/seed.sql),
+// for unit tests that render the catalog without a database. The app reads
+// the real tables through db.ts. listProducts includes out-of-stock products;
+// sampleCatalogDb applies the public in-stock rule like db.ts does.
 
 import type { CatalogCategory, CatalogProduct, ProductQuery } from "./types";
+import type * as CatalogDb from "./db";
 
 type CategoryRow = { id: string; name: string; slug: string; is_active: boolean };
 
@@ -134,3 +136,11 @@ export async function listProducts({ q, category }: ProductQuery = {}): Promise<
     .map(toProduct)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Stands in for ./db in unit tests: `vi.mock("@/lib/catalog/db", () => sampleCatalogDb)`. */
+export const sampleCatalogDb: Pick<typeof CatalogDb, "selectCategories" | "selectProducts" | "selectProduct"> = {
+  selectCategories: () => listCategories(),
+  selectProducts: async (_db, query) => (await listProducts(query)).filter((p) => p.inStock),
+  selectProduct: async (_db, productId) =>
+    (await listProducts()).find((p) => p.id === productId && p.inStock) ?? null,
+};
