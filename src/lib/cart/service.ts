@@ -52,6 +52,7 @@ export async function setCustomerCartItem(
 }
 
 export type ActiveCart = {
+  id: string;
   customerId: string;
   status: string;
   items: { productId: string; quantity: number }[];
@@ -65,11 +66,12 @@ export type ActiveCart = {
  */
 export async function getActiveCart(db: SupabaseClient, customerId: string): Promise<ActiveCart | null> {
   const { data, error } = await db.from("carts")
-    .select("customer_id, status, cart_items(product_id, quantity)")
+    .select("id, customer_id, status, cart_items(product_id, quantity)")
     .eq("customer_id", customerId).eq("status", "ACTIVE").maybeSingle();
   if (error) throw new Error(`getActiveCart failed: ${error.message}`);
   if (!data) return null;
   return {
+    id: data.id,
     customerId: data.customer_id,
     status: data.status,
     items: data.cart_items.map((item: { product_id: string; quantity: number }) => ({
