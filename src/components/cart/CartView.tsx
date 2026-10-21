@@ -367,13 +367,15 @@ export function CartView() {
               </div>
             </dl>
 
-            <Button
-              href="/checkout"
-              className="mt-6 w-full"
-              disabled={!canCheckout}
-            >
-              Checkout
-            </Button>
+            {canCheckout ? (
+              <Button href="/checkout" className="mt-6 w-full">
+                Checkout
+              </Button>
+            ) : (
+              <Button className="mt-6 w-full" disabled>
+                Checkout
+              </Button>
+            )}
 
             {!canCheckout && (
               <p className="mt-2 text-base text-pencil/70">
