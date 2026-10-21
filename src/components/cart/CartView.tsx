@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Minus, Plus, ShoppingBasket, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StickyTag } from "@/components/ui/StickyTag";
 import { formatCents, formatWeight } from "@/lib/cart/format";
-import { SAMPLE_CART, SAMPLE_PRODUCTS, setQuantity, type CartItem } from "@/lib/cart/mockCart";
+import type { CartItem } from "@/lib/cart/mockCart";
 import {
   DELIVERY_FEE_CENTS,
   FREE_DELIVERY_WEIGHT_LIMIT,
@@ -18,35 +18,105 @@ const stepButton =
   "inline-flex h-10 w-10 items-center justify-center rounded-wobbly border-2 border-pencil bg-white shadow-hard-sm transition-all duration-100 hover:bg-postit active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:pointer-events-none disabled:opacity-40";
 
 export function CartView() {
-  // TODO(#14, #15): load and update the cart through the cart API instead.
-  const [items, setItems] = useState<CartItem[]>(() => [...SAMPLE_CART]);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [checkoutNote, setCheckoutNote] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Fetch initial cart from backend
+  const fetchCart = async () => {
+    try {
+      const res = await fetch("/api/cart");
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError("Please log in to access your cart.");
+          return;
+        }
+        throw new Error("Failed to load your cart.");
+      }
+      const data = await res.json();
+
+      // Map API schema to component schema
+      const mapped: CartItem[] = (data.items || []).map((i: any) => ({
+        productId: i.product_id,
+        name: i.name,
+        unitLabel: i.unit_label || "unit",
+        unitPriceCents: i.price_cents,
+        unitWeight: i.unit_weight,
+        quantity: i.quantity,
+      }));
+
+      setItems(mapped);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCart();
+  }, []);
+
+  async function change(productId: string, quantity: number) {
+    setError(null);
+    setUpdatingId(productId);
+
+    try {
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, quantity }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error?.message || "Could not update cart quantity.");
+        return;
+      }
+
+      const updated: CartItem[] = (data.items || []).map((i: any) => ({
+        productId: i.product_id,
+        name: i.name,
+        unitLabel: i.unit_label || "unit",
+        unitPriceCents: i.price_cents,
+        unitWeight: i.unit_weight,
+        quantity: i.quantity,
+      }));
+
+      setItems(updated);
+    } catch {
+      setError("Network error while updating cart.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
   const pricing = priceCart(items);
   const canCheckout = items.length > 0 && !pricing.overWeightLimit;
-  const notInCart = SAMPLE_PRODUCTS.filter((p) => !items.some((i) => i.productId === p.productId));
 
-  function change(productId: string, quantity: number) {
-    const result = setQuantity(items, productId, quantity);
-    if (result.ok) {
-      setItems(result.items);
-      setError(null);
-    } else {
-      setError(result.error);
-    }
-    setCheckoutNote(false);
+  if (loading) {
+    return (
+      <section className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 md:py-16 text-center">
+        <p className="text-2xl font-heading animate-pulse">Loading your cart...</p>
+      </section>
+    );
   }
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 md:py-16">
-      <StickyTag>Demo cart · sample items</StickyTag>
+      <StickyTag>Active Cart</StickyTag>
       <h1 className="mt-4 text-4xl md:text-5xl">Your cart</h1>
 
       <div
         role="alert"
         aria-live="assertive"
-        className={error ? "mt-6 flex items-start gap-3 rounded-wobbly-md border-[3px] border-marker bg-white p-4 text-lg shadow-hard-sm" : "sr-only"}
+        className={
+          error
+            ? "mt-6 flex items-start gap-3 rounded-wobbly-md border-[3px] border-marker bg-white p-4 text-lg shadow-hard-sm"
+            : "sr-only"
+        }
       >
         {error && (
           <>
@@ -68,72 +138,62 @@ export function CartView() {
             </Card>
           ) : (
             <ul className="space-y-4">
-              {items.map((item) => (
-                <li
-                  key={item.productId}
-                  className="flex flex-wrap items-center gap-4 rounded-wobbly-md border-2 border-pencil bg-white p-4 shadow-soft"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-heading text-xl">{item.name}</p>
-                    <p className="text-base text-pencil/70">
-                      {item.unitLabel} · {formatCents(item.unitPriceCents)} · {formatWeight(item.unitWeight)} each
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2" role="group" aria-label={`Quantity of ${item.name}`}>
-                    <button
-                      type="button"
-                      className={stepButton}
-                      aria-label={`Remove one ${item.name}`}
-                      disabled={item.quantity <= 1}
-                      onClick={() => change(item.productId, item.quantity - 1)}
-                    >
-                      <Minus aria-hidden strokeWidth={3} className="h-4 w-4" />
-                    </button>
-                    <span className="w-8 text-center text-xl tabular-nums" aria-live="polite">
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      className={stepButton}
-                      aria-label={`Add one ${item.name}`}
-                      onClick={() => change(item.productId, item.quantity + 1)}
-                    >
-                      <Plus aria-hidden strokeWidth={3} className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <p className="w-20 text-right text-xl tabular-nums">
-                    {formatCents(item.unitPriceCents * item.quantity)}
-                  </p>
-
-                  <button
-                    type="button"
-                    className={stepButton}
-                    aria-label={`Remove ${item.name} from cart`}
-                    onClick={() => change(item.productId, 0)}
+              {items.map((item) => {
+                const isBusy = updatingId === item.productId;
+                return (
+                  <li
+                    key={item.productId}
+                    className={`flex flex-wrap items-center gap-4 rounded-wobbly-md border-2 border-pencil bg-white p-4 shadow-soft transition-opacity ${isBusy ? "opacity-50 pointer-events-none" : ""
+                      }`}
                   >
-                    <Trash2 aria-hidden strokeWidth={2.5} className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-heading text-xl">{item.name}</p>
+                      <p className="text-base text-pencil/70">
+                        {formatCents(item.unitPriceCents)} · {formatWeight(item.unitWeight)} each
+                      </p>
+                    </div>
 
-          {notInCart.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-2xl">Add sample items</h2>
-              <ul className="mt-3 flex flex-wrap gap-3">
-                {notInCart.map((p) => (
-                  <li key={p.productId}>
-                    <Button variant="secondary" onClick={() => change(p.productId, 1)}>
-                      <Plus aria-hidden strokeWidth={3} className="h-4 w-4" />
-                      {p.name} ({formatWeight(p.unitWeight)})
-                    </Button>
+                    <div className="flex items-center gap-2" role="group" aria-label={`Quantity of ${item.name}`}>
+                      <button
+                        type="button"
+                        className={stepButton}
+                        aria-label={`Remove one ${item.name}`}
+                        disabled={item.quantity <= 1 || isBusy}
+                        onClick={() => change(item.productId, item.quantity - 1)}
+                      >
+                        <Minus aria-hidden strokeWidth={3} className="h-4 w-4" />
+                      </button>
+                      <span className="w-8 text-center text-xl tabular-nums" aria-live="polite">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        className={stepButton}
+                        aria-label={`Add one ${item.name}`}
+                        disabled={isBusy}
+                        onClick={() => change(item.productId, item.quantity + 1)}
+                      >
+                        <Plus aria-hidden strokeWidth={3} className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <p className="w-20 text-right text-xl tabular-nums">
+                      {formatCents(item.unitPriceCents * item.quantity)}
+                    </p>
+
+                    <button
+                      type="button"
+                      className={stepButton}
+                      aria-label={`Remove ${item.name} from cart`}
+                      disabled={isBusy}
+                      onClick={() => change(item.productId, 0)}
+                    >
+                      <Trash2 aria-hidden strokeWidth={2.5} className="h-4 w-4" />
+                    </button>
                   </li>
-                ))}
-              </ul>
-            </div>
+                );
+              })}
+            </ul>
           )}
         </div>
 
@@ -168,17 +228,12 @@ export function CartView() {
               </div>
             </dl>
 
-            <Button className="mt-6 w-full" disabled={!canCheckout} onClick={() => setCheckoutNote(true)}>
+            <Button href="/checkout" className="mt-6 w-full" disabled={!canCheckout}>
               Checkout
             </Button>
             {!canCheckout && (
               <p className="mt-2 text-base text-pencil/70">
                 {items.length === 0 ? "Add an item to check out." : "Bring the cart under the weight limit to check out."}
-              </p>
-            )}
-            {checkoutNote && (
-              <p className="mt-2 text-base text-pencil/70" role="status">
-                Checkout isn&apos;t built yet. It&apos;s coming in the checkout page.
               </p>
             )}
             <p className="mt-6 text-sm text-pencil/60">
@@ -201,7 +256,6 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Progress toward the free-delivery threshold. */
 function WeightMeter({ totalWeight }: { totalWeight: number }) {
   const free = totalWeight < FREE_DELIVERY_WEIGHT_LIMIT;
   const percent = Math.min(100, Math.round((totalWeight * 100) / FREE_DELIVERY_WEIGHT_LIMIT));
