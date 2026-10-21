@@ -1,5 +1,6 @@
 import { priceCart, type PricedLine } from "@/lib/cart/pricing";
 
+/** Money is integer cents; totalWeight is integer hundredths of a pound. */
 export type CheckoutTotals = {
   subtotalCents: number;
   totalWeight: number;
@@ -18,6 +19,7 @@ export type CheckoutCart = {
 
 export type CheckoutProduct = {
   id: string;
+  /** The real adapter combines product and category active status. */
   isActive: boolean;
   unitPriceCents: number;
   unitWeight: number;
@@ -31,12 +33,12 @@ export type CheckoutAddress = {
   eligible: boolean;
 };
 
-/** Read-only service contracts; actual cart/address adapters are pending upstream work. */
+/** Read-only service contracts used by the database adapter and unit tests. */
 export type CheckoutDependencies = {
   getActiveCart(customerId: string): Promise<CheckoutCart | null>;
   getAddress(customerId: string, addressId: string): Promise<CheckoutAddress | null>;
   getProducts(productIds: readonly string[]): Promise<readonly CheckoutProduct[]>;
-  /** Required server-side policy. There is deliberately no default tax rate. */
+  /** Server-side policy supplied by the adapter, never the browser. */
   calculateTaxCents(subtotalCents: number, address: CheckoutAddress): Promise<number>;
 };
 
@@ -46,9 +48,13 @@ export type CheckoutErrorCode =
   | "ADDRESS_INVALID" | "PRODUCT_UNAVAILABLE" | "INSUFFICIENT_STOCK"
   | "CART_OVERWEIGHT" | "TOTALS_MISMATCH";
 
+// Expected purchase failures return structured errors. Broken dependencies or
+// invalid authoritative data throw instead, so the route can return a generic 500.
 export type CheckoutResult =
   | { ok: true; value: CheckoutPreview }
   | { ok: false; error: { code: CheckoutErrorCode; message: string; productId?: string }; current?: CheckoutPreview };
+
+export type PreviewInput = { addressId: string; expected: CheckoutTotals };
 
 const TOTAL_FIELDS = ["subtotalCents", "totalWeight", "deliveryFeeCents", "taxCents", "totalCents"] as const;
 
@@ -64,9 +70,28 @@ function failure(code: CheckoutErrorCode, message: string, productId?: string): 
   return { ok: false, error: { code, message, ...(productId === undefined ? {} : { productId }) } };
 }
 
+/** Shared input checks; the HTTP boundary additionally requires a UUID address ID. */
+export function parsePreviewInput(body: unknown):
+  | { ok: true; value: PreviewInput }
+  | Extract<CheckoutResult, { ok: false }> {
+  const bad = (code: CheckoutErrorCode, message: string) => ({ ok: false as const, error: { code, message } });
+  if (!object(body)) return bad("INVALID_REQUEST", "Checkout request must be a JSON object.");
+  if (typeof body.addressId !== "string" || !body.addressId.trim()) {
+    return bad("ADDRESS_REQUIRED", "Select a delivery address.");
+  }
+  const expected = body.expected;
+  if (!object(expected) || !TOTAL_FIELDS.every((key) => nonNegativeInteger(expected[key]))) {
+    return bad("INVALID_TOTALS", "Provide the displayed checkout totals as non-negative integers.");
+  }
+  // Copy only the allowed fields. Client-supplied identity, items, prices, and
+  // stock cannot become trusted service inputs through this request parser.
+  return { ok: true, value: { addressId: body.addressId,
+    expected: Object.fromEntries(TOTAL_FIELDS.map((key) => [key, expected[key]])) as CheckoutTotals } };
+}
+
 /**
  * Server-side preview only: no reservations, mutations, charges, or orders.
- * customerId MUST come from a verified CUSTOMER session in the future route.
+ * customerId MUST come from a verified CUSTOMER session.
  * body.expected is a comparison snapshot, never an authoritative amount.
  * Unexpected dependency/data failures throw for the route's generic 500 handler.
  * A successful preview does not replace revalidation during payment/finalization.
@@ -77,14 +102,9 @@ export async function previewCheckout(
   services: CheckoutDependencies,
 ): Promise<CheckoutResult> {
   if (!customerId) throw new Error("A verified customer identity is required.");
-  if (!object(body)) return failure("INVALID_REQUEST", "Checkout request must be a JSON object.");
-  if (typeof body.addressId !== "string" || !body.addressId.trim()) {
-    return failure("ADDRESS_REQUIRED", "Select a delivery address.");
-  }
-  const expected = body.expected;
-  if (!object(expected) || !TOTAL_FIELDS.every((key) => nonNegativeInteger(expected[key]))) {
-    return failure("INVALID_TOTALS", "Provide the displayed checkout totals as non-negative integers.");
-  }
+  const parsed = parsePreviewInput(body);
+  if (!parsed.ok) return parsed;
+  const { addressId, expected } = parsed.value;
 
   const cart = await services.getActiveCart(customerId);
   if (!cart || cart.customerId !== customerId || cart.status !== "ACTIVE") {
@@ -92,6 +112,8 @@ export async function previewCheckout(
   }
   if (cart.items.length === 0) return failure("CART_EMPTY", "Your cart is empty.");
 
+  // Reject duplicate lines instead of checking stock separately for each copy.
+  // The database prevents duplicates too, but alternate adapters must be safe.
   const seen = new Set<string>();
   for (const item of cart.items) {
     if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) {
@@ -103,8 +125,10 @@ export async function previewCheckout(
     seen.add(item.productId);
   }
 
-  const address = await services.getAddress(customerId, body.addressId);
-  if (!address || address.id !== body.addressId || address.customerId !== customerId || address.eligible !== true) {
+  // Return the same error for foreign, missing, and ineligible addresses so the
+  // response cannot be used to discover another customer's saved addresses.
+  const address = await services.getAddress(customerId, addressId);
+  if (!address || address.id !== addressId || address.customerId !== customerId || address.eligible !== true) {
     return failure("ADDRESS_INVALID", "Select a valid delivery address within the service area.");
   }
 
@@ -123,10 +147,12 @@ export async function previewCheckout(
     if (item.quantity > product.stockQuantity) {
       return failure("INSUFFICIENT_STOCK", "There is not enough stock for the requested quantity.", item.productId);
     }
+    // Only persisted quantities and freshly loaded product values enter pricing.
     lines.push({ quantity: item.quantity, unitPriceCents: product.unitPriceCents, unitWeight: product.unitWeight });
   }
 
   const pricing = priceCart(lines);
+  // Safe individual inputs can still overflow when multiplied or summed.
   if (![pricing.subtotalCents, pricing.totalWeight, pricing.totalCents].every(nonNegativeInteger)) {
     throw new Error("Checkout totals exceed safe integer arithmetic.");
   }
@@ -144,6 +170,9 @@ export async function previewCheckout(
     totalCents: pricing.totalCents + taxCents,
     feeWarning: pricing.feeWarning,
   };
+  // Compare every displayed aggregate, not just the grand total: a fee change
+  // must not be hidden by an offsetting subtotal change. Individual price changes
+  // that leave all aggregates unchanged are outside this comparison contract.
   if (TOTAL_FIELDS.some((key) => expected[key] !== current[key])) {
     return {
       ok: false,

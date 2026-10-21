@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface CartResponse {
     cart_id: string;
@@ -48,4 +49,31 @@ export async function setCustomerCartItem(
     }
 
     return data as CartResponse;
+}
+
+export type ActiveCart = {
+  customerId: string;
+  status: string;
+  items: { productId: string; quantity: number }[];
+};
+
+/**
+ * Read an existing active cart for a verified session customer. The admin client
+ * bypasses RLS, so the customer filter is essential for ownership isolation.
+ * Unlike customer_get_cart, this does not create a missing cart. Prices and
+ * stock are intentionally loaded separately from current product data.
+ */
+export async function getActiveCart(db: SupabaseClient, customerId: string): Promise<ActiveCart | null> {
+  const { data, error } = await db.from("carts")
+    .select("customer_id, status, cart_items(product_id, quantity)")
+    .eq("customer_id", customerId).eq("status", "ACTIVE").maybeSingle();
+  if (error) throw new Error(`getActiveCart failed: ${error.message}`);
+  if (!data) return null;
+  return {
+    customerId: data.customer_id,
+    status: data.status,
+    items: data.cart_items.map((item: { product_id: string; quantity: number }) => ({
+      productId: item.product_id, quantity: item.quantity,
+    })),
+  };
 }
