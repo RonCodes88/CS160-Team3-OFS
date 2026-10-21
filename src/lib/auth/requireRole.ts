@@ -4,6 +4,7 @@ import { errorResponse } from "@/lib/api/errors";
 import { getSessionUser, type Role, type SessionUser } from "@/lib/auth/session";
 
 export const STAFF_ROLES: readonly Role[] = ["EMPLOYEE", "MANAGER"];
+export const MANAGER_ROLES: readonly Role[] = ["MANAGER"];
 
 type AuthResult = { ok: true; user: SessionUser } | { ok: false; response: Response };
 
