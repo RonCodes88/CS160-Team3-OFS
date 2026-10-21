@@ -6,8 +6,8 @@ export const DEFAULT_PAGE_LIMIT = 50;
 export const MAX_PAGE_LIMIT = 100;
 export const MAX_SEARCH_LENGTH = 100;
 
-// stock_quantity is a Postgres INTEGER.
-const PG_INT_MAX = 2_147_483_647;
+// Largest value a Postgres INTEGER column can hold.
+export const PG_INT_MAX = 2_147_483_647;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,7 +53,7 @@ function parseWholeNumberParam(
   return { ok: true, value };
 }
 
-function parsePage(params: URLSearchParams): Parsed<{ limit: number; offset: number }> {
+export function parsePage(params: URLSearchParams): Parsed<{ limit: number; offset: number }> {
   const limit = parseWholeNumberParam(params, "limit", DEFAULT_PAGE_LIMIT, 1, MAX_PAGE_LIMIT);
   if (!limit.ok) return limit;
   const offset = parseWholeNumberParam(params, "offset", 0, 0, PG_INT_MAX);
