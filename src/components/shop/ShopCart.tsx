@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Minus, Plus, ShoppingBasket, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, Minus, Plus, ShoppingBasket, Truck, X } from "lucide-react";
 import { formatCents, formatWeight } from "@/lib/cart/format";
 import { DELIVERY_FEE_CENTS, FREE_DELIVERY_WEIGHT_LIMIT, priceCart } from "@/lib/cart/pricing";
 import type { ShopCartLine } from "@/lib/catalog/shopCart";
@@ -297,25 +297,21 @@ export function AddToCartControl({ product, size = "md" }: { product: CatalogPro
   }
 
   const square = size === "lg" ? "h-14 w-14" : "h-11 w-11";
+  const step = `${control} ${square} shrink-0 bg-white hover:bg-postit`;
   return (
-    <div
-      role="group"
-      aria-label={`${product.name} in your cart`}
-      className={`flex ${height} w-full items-center justify-between gap-2 rounded-wobbly border-2 border-pencil bg-pencil p-0.5 text-white`}
-    >
+    <div role="group" aria-label={`${product.name} in your cart`} className={`flex ${height} w-full items-center gap-2`}>
       <button
         type="button"
         onClick={() => setQuantity(product, quantity - 1)}
         aria-label={quantity === 1 ? `Remove ${product.name} from cart` : `Remove one ${product.name}`}
-        className={`${square} inline-flex shrink-0 items-center justify-center rounded-wobbly bg-pencil hover:bg-white/20 disabled:opacity-50`}
+        className={step}
       >
-        {quantity === 1 ? (
-          <Trash2 aria-hidden strokeWidth={2.5} className="h-5 w-5" />
-        ) : (
-          <Minus aria-hidden strokeWidth={3} className="h-5 w-5" />
-        )}
+        <Minus aria-hidden strokeWidth={3} className="h-5 w-5" />
       </button>
-      <span className="font-body text-2xl tabular-nums" aria-live="polite">
+      <span
+        className="flex h-full flex-1 items-center justify-center rounded-wobbly border-2 border-dashed border-pencil/50 bg-postit text-2xl tabular-nums"
+        aria-live="polite"
+      >
         {quantity}
         <span className="sr-only"> in cart</span>
       </span>
@@ -323,7 +319,7 @@ export function AddToCartControl({ product, size = "md" }: { product: CatalogPro
         type="button"
         onClick={() => setQuantity(product, quantity + 1)}
         aria-label={`Add one more ${product.name}`}
-        className={`${square} inline-flex shrink-0 items-center justify-center rounded-wobbly bg-pencil hover:bg-white/20 disabled:opacity-50`}
+        className={step}
       >
         <Plus aria-hidden strokeWidth={3} className="h-5 w-5" />
       </button>
