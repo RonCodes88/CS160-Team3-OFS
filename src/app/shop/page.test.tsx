@@ -26,6 +26,13 @@ describe("/shop page", () => {
     expect(html).not.toContain("Discontinued Granola");
   });
 
+  it("links every product card to its product page", async () => {
+    const res = await getProducts(new Request("http://localhost/api/products"));
+    const { products } = (await res.json()) as { products: CatalogProduct[] };
+    const html = await render();
+    for (const p of products) expect(html).toContain(`href="/shop/${p.id}"`);
+  });
+
   it("hides out-of-stock products, like the API", async () => {
     const html = await render({ q: "cheddar" });
     expect(html).toContain("0 products");
