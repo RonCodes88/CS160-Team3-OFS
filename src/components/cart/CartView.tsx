@@ -13,13 +13,40 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StickyTag } from "@/components/ui/StickyTag";
 import { formatCents, formatWeight } from "@/lib/cart/format";
-import type { CartItem } from "@/lib/cart/mockCart";
 import {
   DELIVERY_FEE_CENTS,
   FREE_DELIVERY_WEIGHT_LIMIT,
   MAX_CART_WEIGHT,
-  priceCart,
 } from "@/lib/cart/pricing";
+
+type CartItem = {
+  productId: string;
+  name: string;
+  unitLabel: string;
+  unitPriceCents: number;
+  /** Hundredths of a pound. */
+  unitWeight: number;
+  quantity: number;
+};
+
+/** Totals as priced by the server; the page never recalculates them. */
+export type CartTotals = {
+  subtotalCents: number;
+  totalWeight: number;
+  deliveryFeeCents: number;
+  totalCents: number;
+  feeWarning: boolean;
+  overWeightLimit: boolean;
+};
+
+const EMPTY_TOTALS: CartTotals = {
+  subtotalCents: 0,
+  totalWeight: 0,
+  deliveryFeeCents: 0,
+  totalCents: 0,
+  feeWarning: false,
+  overWeightLimit: false,
+};
 
 type ApiCartItem = {
   product_id: string;
@@ -32,6 +59,12 @@ type ApiCartItem = {
 
 type ApiCartResponse = {
   items?: ApiCartItem[];
+  subtotal_cents?: number;
+  total_weight?: number;
+  delivery_fee_cents?: number;
+  total_cents?: number;
+  fee_warning?: boolean;
+  over_weight_limit?: boolean;
   error?: {
     message?: string;
   };
@@ -48,11 +81,23 @@ function mapCartItems(data: ApiCartResponse): CartItem[] {
   }));
 }
 
+function mapCartTotals(data: ApiCartResponse): CartTotals {
+  return {
+    subtotalCents: data.subtotal_cents ?? 0,
+    totalWeight: data.total_weight ?? 0,
+    deliveryFeeCents: data.delivery_fee_cents ?? 0,
+    totalCents: data.total_cents ?? 0,
+    feeWarning: data.fee_warning ?? false,
+    overWeightLimit: data.over_weight_limit ?? false,
+  };
+}
+
 const stepButton =
   "inline-flex h-10 w-10 items-center justify-center rounded-wobbly border-2 border-pencil bg-white shadow-hard-sm transition-all duration-100 hover:bg-postit active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:pointer-events-none disabled:opacity-40";
 
 export function CartView() {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [totals, setTotals] = useState<CartTotals>(EMPTY_TOTALS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -81,6 +126,7 @@ export function CartView() {
 
         if (!cancelled) {
           setItems(mapCartItems(data));
+          setTotals(mapCartTotals(data));
         }
       } catch (error: unknown) {
         if (!cancelled) {
@@ -130,6 +176,7 @@ export function CartView() {
       }
 
       setItems(mapCartItems(data));
+      setTotals(mapCartTotals(data));
     } catch (error: unknown) {
       setError(
         error instanceof Error
@@ -140,10 +187,6 @@ export function CartView() {
       setUpdatingId(null);
     }
   }
-
-  const pricing = priceCart(items);
-  const canCheckout =
-    items.length > 0 && !pricing.overWeightLimit;
 
   if (loading) {
     return (
@@ -310,91 +353,109 @@ export function CartView() {
           )}
         </div>
 
-        <aside aria-label="Order summary">
-          <Card
-            decoration="tack"
-            className="lg:sticky lg:top-6"
-          >
-            <h2 className="text-3xl">Summary</h2>
-
-            <WeightMeter totalWeight={pricing.totalWeight} />
-
-            {pricing.feeWarning && (
-              <p className="mt-4 rotate-1 border-2 border-pencil bg-postit p-3 text-lg shadow-hard-sm">
-                Heads up: you&apos;re{" "}
-                {formatWeight(
-                  FREE_DELIVERY_WEIGHT_LIMIT -
-                  pricing.totalWeight,
-                )}{" "}
-                away from the{" "}
-                {formatCents(DELIVERY_FEE_CENTS)} delivery fee.
-              </p>
-            )}
-
-            {pricing.overWeightLimit && (
-              <p className="mt-4 border-[3px] border-marker bg-white p-3 text-lg">
-                This cart is over{" "}
-                {formatWeight(MAX_CART_WEIGHT)}. Remove some
-                items to check out.
-              </p>
-            )}
-
-            <dl className="mt-6 space-y-2 text-xl">
-              <Row
-                label="Subtotal"
-                value={formatCents(pricing.subtotalCents)}
-              />
-
-              <Row
-                label="Total weight"
-                value={formatWeight(pricing.totalWeight)}
-              />
-
-              <Row
-                label="Delivery"
-                value={
-                  pricing.deliveryFeeCents === 0
-                    ? "Free"
-                    : formatCents(pricing.deliveryFeeCents)
-                }
-              />
-
-              <div className="flex justify-between border-t-2 border-dashed border-pencil pt-3 font-heading text-2xl">
-                <dt>Total</dt>
-                <dd className="tabular-nums">
-                  {formatCents(pricing.totalCents)}
-                </dd>
-              </div>
-            </dl>
-
-            {canCheckout ? (
-              <Button href="/checkout" className="mt-6 w-full">
-                Checkout
-              </Button>
-            ) : (
-              <Button className="mt-6 w-full" disabled>
-                Checkout
-              </Button>
-            )}
-
-            {!canCheckout && (
-              <p className="mt-2 text-base text-pencil/70">
-                {items.length === 0
-                  ? "Add an item to check out."
-                  : "Bring the cart under the weight limit to check out."}
-              </p>
-            )}
-
-            <p className="mt-6 text-sm text-pencil/60">
-              Delivery is free under{" "}
-              {formatWeight(FREE_DELIVERY_WEIGHT_LIMIT)}.
-              Orders can weigh up to{" "}
-              {formatWeight(MAX_CART_WEIGHT)}.
-            </p>
-          </Card>
-        </aside>
+        <CartSummary itemCount={items.length} totals={totals} />
       </div>
     </section>
+  );
+}
+
+/**
+ * Server-priced totals, fee and weight warnings, and the checkout button,
+ * which stays disabled while the cart is empty or over the weight limit.
+ */
+export function CartSummary({
+  itemCount,
+  totals,
+}: {
+  itemCount: number;
+  totals: CartTotals;
+}) {
+  const canCheckout = itemCount > 0 && !totals.overWeightLimit;
+
+  return (
+    <aside aria-label="Order summary">
+      <Card
+        decoration="tack"
+        className="lg:sticky lg:top-6"
+      >
+        <h2 className="text-3xl">Summary</h2>
+
+        <WeightMeter totalWeight={totals.totalWeight} />
+
+        {totals.feeWarning && (
+          <p className="mt-4 rotate-1 border-2 border-pencil bg-postit p-3 text-lg shadow-hard-sm">
+            Heads up: you&apos;re{" "}
+            {formatWeight(
+              FREE_DELIVERY_WEIGHT_LIMIT -
+              totals.totalWeight,
+            )}{" "}
+            away from the{" "}
+            {formatCents(DELIVERY_FEE_CENTS)} delivery fee.
+          </p>
+        )}
+
+        {totals.overWeightLimit && (
+          <p className="mt-4 border-[3px] border-marker bg-white p-3 text-lg">
+            This cart is over{" "}
+            {formatWeight(MAX_CART_WEIGHT)}. Remove some
+            items to check out.
+          </p>
+        )}
+
+        <dl className="mt-6 space-y-2 text-xl">
+          <Row
+            label="Subtotal"
+            value={formatCents(totals.subtotalCents)}
+          />
+
+          <Row
+            label="Total weight"
+            value={formatWeight(totals.totalWeight)}
+          />
+
+          <Row
+            label="Delivery"
+            value={
+              totals.deliveryFeeCents === 0
+                ? "Free"
+                : formatCents(totals.deliveryFeeCents)
+            }
+          />
+
+          <div className="flex justify-between border-t-2 border-dashed border-pencil pt-3 font-heading text-2xl">
+            <dt>Total</dt>
+            <dd className="tabular-nums">
+              {formatCents(totals.totalCents)}
+            </dd>
+          </div>
+        </dl>
+
+        {canCheckout ? (
+          <Button href="/checkout" className="mt-6 w-full">
+            Checkout
+          </Button>
+        ) : (
+          <Button className="mt-6 w-full" disabled>
+            Checkout
+          </Button>
+        )}
+
+        {!canCheckout && (
+          <p className="mt-2 text-base text-pencil/70">
+            {itemCount === 0
+              ? "Add an item to check out."
+              : "Bring the cart under the weight limit to check out."}
+          </p>
+        )}
+
+        <p className="mt-6 text-sm text-pencil/60">
+          Delivery is free under{" "}
+          {formatWeight(FREE_DELIVERY_WEIGHT_LIMIT)}.
+          Orders can weigh up to{" "}
+          {formatWeight(MAX_CART_WEIGHT)}.
+        </p>
+      </Card>
+    </aside>
   );
 }
 
