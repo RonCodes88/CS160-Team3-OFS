@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NotificationType, OrderSummary } from "@/lib/notifications/messages";
+import { getOrderSummary } from "@/lib/orders/read";
 
 // Database side of the notification outbox (see the notification_outbox migration).
 
@@ -34,16 +35,6 @@ type NotificationRow = {
   attempts: number;
 };
 
-type OrderRow = {
-  id: string;
-  subtotal_cents: number;
-  delivery_fee_cents: number;
-  tax_cents: number;
-  total_cents: number;
-  delivery_address: Record<string, unknown> | null;
-  order_items: { product_name: string; quantity: number; unit_price_cents: number }[];
-};
-
 export function createNotificationStore(db: SupabaseClient): NotificationStore {
   return {
     async claim(limit) {
@@ -62,30 +53,9 @@ export function createNotificationStore(db: SupabaseClient): NotificationStore {
       }));
     },
 
-    async loadOrder(orderId) {
-      const { data, error } = await db
-        .from("orders")
-        .select(
-          "id, subtotal_cents, delivery_fee_cents, tax_cents, total_cents, delivery_address, order_items(product_name, quantity, unit_price_cents)",
-        )
-        .eq("id", orderId)
-        .maybeSingle();
-      if (error) throw new Error(`loading order ${orderId} failed: ${error.message}`);
-      if (!data) return null;
-      const row = data as OrderRow;
-      return {
-        id: row.id,
-        subtotalCents: row.subtotal_cents,
-        deliveryFeeCents: row.delivery_fee_cents,
-        taxCents: row.tax_cents,
-        totalCents: row.total_cents,
-        deliveryAddress: row.delivery_address ?? {},
-        items: row.order_items.map((item) => ({
-          productName: item.product_name,
-          quantity: item.quantity,
-          unitPriceCents: item.unit_price_cents,
-        })),
-      };
+    // Orders belong to the Order service, so read them through its API.
+    loadOrder(orderId) {
+      return getOrderSummary(db, orderId);
     },
 
     async markSent(id) {

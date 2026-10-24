@@ -1,4 +1,5 @@
 import { formatCents } from "@/lib/cart/format";
+import type { OrderSummary } from "@/lib/orders/read";
 
 // Builds the customer-facing text for each notification. Pure functions: all
 // data comes from the order's checkout snapshot and the event payload saved
@@ -6,15 +7,7 @@ import { formatCents } from "@/lib/cart/format";
 
 export type NotificationType = "ORDER_CONFIRMED" | "READY_FOR_DELIVERY" | "DELIVERY_UPDATE" | "DELIVERED";
 
-export type OrderSummary = {
-  id: string;
-  subtotalCents: number;
-  deliveryFeeCents: number;
-  taxCents: number;
-  totalCents: number;
-  deliveryAddress: Record<string, unknown>;
-  items: { productName: string; quantity: number; unitPriceCents: number }[];
-};
+export type { OrderSummary };
 
 export type RenderedMessage = { subject: string; text: string };
 
