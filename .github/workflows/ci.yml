@@ -55,11 +55,12 @@ jobs:
 
       # Applies supabase/migrations and seed.sql (the auth tests log in as the
       # seeded demo accounts). The tests only talk to Postgres through the API
-      # gateway (Kong) and PostgREST, so skip every other container.
+      # gateway (Kong) and PostgREST, so skip the other containers. GoTrue stays:
+      # without it the CLI does not report the API keys.
       - name: Start local Supabase
         run: >-
           npx supabase start
-          -x gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       - name: Point the DB tests at local Supabase
         run: |
