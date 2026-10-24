@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CartSummary, type CartTotals } from "./CartView";
+import type { CartTotals } from "./cartApi";
+import { CartSummary } from "./CartSummary";
 
 const totals = (overrides: Partial<CartTotals> = {}): CartTotals => ({
   subtotalCents: 1234, totalWeight: 500, deliveryFeeCents: 0, totalCents: 1234,

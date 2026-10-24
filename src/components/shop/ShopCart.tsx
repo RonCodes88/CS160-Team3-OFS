@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, Minus, Plus, ShoppingBasket, Truck, X } from "lucide-react";
 import { formatCents, formatWeight } from "@/lib/cart/format";
-import { DELIVERY_FEE_CENTS, FREE_DELIVERY_WEIGHT_LIMIT, priceCart } from "@/lib/cart/pricing";
+import { DELIVERY_FEE_CENTS, FREE_DELIVERY_WEIGHT_LIMIT, MAX_CART_WEIGHT } from "@/lib/cart/pricing";
+import { EMPTY_TOTALS, mapCartTotals, type CartTotals } from "@/components/cart/cartApi";
 import type { ShopCartLine } from "@/lib/catalog/shopCart";
 import type { CatalogProduct } from "@/lib/catalog/types";
 
@@ -60,6 +61,8 @@ function withWanted(lines: readonly ShopCartLine[], wanted: ReadonlyMap<string, 
 export function ShopCartProvider({ children }: { children: ReactNode }) {
   const [shopper, setShopper] = useState<Shopper>("loading");
   const [lines, setLines] = useState<ShopCartLine[]>([]);
+  // Priced by the server; updated with each response, never computed here.
+  const [totals, setTotals] = useState<CartTotals>(EMPTY_TOTALS);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   // The last cart the server confirmed, and the quantities not yet saved.
@@ -78,6 +81,7 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
         if (!response.ok) throw new Error(data.error?.message ?? "Unable to load your cart.");
         saved.current = toLines(data as ApiCart);
         setLines(saved.current);
+        setTotals(mapCartTotals(data));
         setShopper("customer");
       })
       .catch((e: Error) => {
@@ -132,6 +136,7 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error?.message ?? "Unable to update your cart.");
         saved.current = toLines(data as ApiCart);
+        setTotals(mapCartTotals(data));
         // Done unless the shopper clicked again while this was saving.
         if (wanted.current.get(productId)?.quantity === quantity) wanted.current.delete(productId);
       }
@@ -152,36 +157,41 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
   return (
     <ShopCartContext.Provider value={{ shopper, lines, setQuantity }}>
       {children}
-      <CartBar lines={lines} saving={pending.size > 0} error={error} onDismiss={() => setError(null)} />
+      <CartBar lines={lines} totals={totals} saving={pending.size > 0} error={error} onDismiss={() => setError(null)} />
     </ShopCartContext.Provider>
   );
 }
 
 /**
  * Pinned to the bottom of the screen so the cart total and any error are
- * visible wherever the shopper has scrolled.
+ * visible wherever the shopper has scrolled. Item counts follow the shopper's
+ * clicks right away; money, weight, and the fee come from the server's last
+ * response, so they catch up once a save finishes.
  */
-function CartBar({
+export function CartBar({
   lines,
+  totals,
   saving,
   error,
   onDismiss,
 }: {
   lines: readonly ShopCartLine[];
+  totals: CartTotals;
   saving: boolean;
   error: string | null;
   onDismiss: () => void;
 }) {
-  const pricing = priceCart(lines);
   const count = lines.reduce((sum, line) => sum + line.quantity, 0);
 
   let delivery: ReactNode;
-  if (pricing.deliveryFeeCents > 0) {
-    delivery = <>{formatCents(DELIVERY_FEE_CENTS)} delivery fee</>;
-  } else if (pricing.feeWarning) {
+  if (totals.overWeightLimit) {
+    delivery = <span className="font-heading text-marker">Over the {formatWeight(MAX_CART_WEIGHT)} limit</span>;
+  } else if (totals.deliveryFeeCents > 0) {
+    delivery = <>{formatCents(totals.deliveryFeeCents)} delivery fee</>;
+  } else if (totals.feeWarning) {
     delivery = (
       <span className="font-heading">
-        {formatWeight(FREE_DELIVERY_WEIGHT_LIMIT - pricing.totalWeight)} until the{" "}
+        {formatWeight(FREE_DELIVERY_WEIGHT_LIMIT - totals.totalWeight)} until the{" "}
         {formatCents(DELIVERY_FEE_CENTS)} delivery fee
       </span>
     );
@@ -221,13 +231,13 @@ function CartBar({
             <ShoppingBasket aria-hidden strokeWidth={2.5} className="hidden h-7 w-7 shrink-0 sm:block" />
             <div className="min-w-0 flex-1" aria-live="polite">
               <p className="font-heading text-xl tabular-nums">
-                {count} {count === 1 ? "item" : "items"} · {formatCents(pricing.subtotalCents)}
+                {count} {count === 1 ? "item" : "items"} · {formatCents(totals.subtotalCents)}
                 {saving && <span className="ml-2 font-body text-base text-pencil/70">Saving…</span>}
               </p>
               <p className="flex items-center gap-1 text-base tabular-nums">
                 <Truck aria-hidden strokeWidth={2.5} className="h-4 w-4 shrink-0" />
                 <span className="truncate">
-                  {formatWeight(pricing.totalWeight)} · {delivery}
+                  {formatWeight(totals.totalWeight)} · {delivery}
                 </span>
               </p>
             </div>
