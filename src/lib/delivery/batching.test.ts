@@ -150,6 +150,15 @@ describe("planTrips", () => {
     expect(planTrips([b, a])[0].orders[0].orderId).toBe("a");
   });
 
+  it("keeps queue order when paid time and order ID both tie", () => {
+    // Duplicate IDs should never reach the planner, but the sort must still
+    // treat them as equal and keep both orders instead of dropping one.
+    const first = order({ orderId: "same", minute: 0 });
+    const second = order({ orderId: "same", minute: 0, north: 0.5 });
+    const [trip] = planTrips([first, second]);
+    expect(trip.orders).toEqual([first, second]);
+  });
+
   it.each([
     ["over 200.00 lbs", 20001],
     ["negative", -1],
