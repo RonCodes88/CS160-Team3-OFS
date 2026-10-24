@@ -79,7 +79,8 @@ describe.skipIf(!TEST_URL || !TEST_KEY)("schema constraints against Postgres", (
 
   it("requires a two-letter state and a location on addresses", async () => {
     expect(await insertError("addresses", { customer_id: customerId, ...ADDRESS, state: "California" })).toMatch(/state/);
-    const { location: _, ...noLocation } = ADDRESS;
+    const noLocation: Partial<typeof ADDRESS> = { ...ADDRESS };
+    delete noLocation.location;
     expect(await insertError("addresses", { customer_id: customerId, ...noLocation })).toMatch(/location/);
   });
 
