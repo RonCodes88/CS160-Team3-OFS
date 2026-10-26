@@ -23,7 +23,10 @@ if (
   throw new Error(`Refusing to run DB tests against non-local SUPABASE_TEST_URL: ${TEST_URL}`);
 }
 
-const run = randomUUID().slice(0, 8);
+// Keep fixture names unique without accidentally matching the numeric "50%" search.
+const run = randomUUID().slice(0, 8).replace(/[0-9]/g, (digit) =>
+  String.fromCharCode("g".charCodeAt(0) + Number(digit)),
+);
 
 describe("buildCatalogSearchFilter", () => {
   it("matches name or description", () => {
