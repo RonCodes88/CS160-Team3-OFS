@@ -45,6 +45,7 @@ export function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 const digest = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
+export const scopePaymentKey = (customerId: string, key: string) => digest([customerId, key]);
 
 /** Session identity and parsed input only. Persistence precedes any Stripe call. */
 export async function startPayment(customerId: string, key: string, input: PreviewInput, deps: PaymentDependencies) {
@@ -52,7 +53,7 @@ export async function startPayment(customerId: string, key: string, input: Previ
     throw new PaymentError(400, "INVALID_IDEMPOTENCY_KEY", "Provide an Idempotency-Key of 1–128 letters, digits, hyphens or underscores.");
   }
   // Customer scoping prevents one customer's key from colliding with another's.
-  const scopedKey = digest([customerId, key]);
+  const scopedKey = scopePaymentKey(customerId, key);
   const requestHash = digest(input);
   let attempt = await deps.find(customerId, scopedKey);
   const checkRequest = () => {
