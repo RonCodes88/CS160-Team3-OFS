@@ -83,6 +83,12 @@ PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enab
   npx supabase db push
   ```
 - **Local database for DB tests:** `npx supabase start` runs Postgres with every migration applied. `npx supabase db reset` re-applies them from scratch. Copy the API URL and secret key from `npx supabase status` into `.env.test.local` as `SUPABASE_TEST_URL` and `SUPABASE_TEST_SECRET_KEY`. Then `npm test` also runs the `*.db.test.ts` files.
+- **Keeping your local database up to date:** pulling a teammate's migration doesn't change your local database. Check for migrations you haven't applied yet with:
+  ```bash
+  npx supabase migration list --local    # a blank "Remote" column means not applied yet
+  npx supabase migration up --local      # applies only the missing ones, keeps your data
+  ```
+  These run on your machine, not through `docker compose exec web`, because the app container can't reach the local database. You need Node.js and `npm install`, which installs the Supabase CLI from `devDependencies` (nothing else to install). You also need Docker Desktop open, and the local database started once with `npx supabase start`. To check the hosted project instead, use `--linked` (needs `npx supabase login` and `link` first).
 - **Demo accounts:** `npx supabase db reset` also loads `supabase/seed.sql`: the sample catalog plus `customer.test`, `employee.test`, `manager.test`, and `vehicle.test` `@ofs.local`, all with the password `ChangeMe123!`. Local and demo only.
 - **Schema changes:** add a new migration (`npx supabase migration new <name>`). Never edit one that's already applied.
 
@@ -111,4 +117,6 @@ Ask the team before adding a new package. All of these are installed by `npm ci`
 
 - **`Supabase: Not configured`**: `.env.local` is missing or empty. Fill it in, then restart with `docker compose up`.
 - **Port 3000 already in use**: stop whatever else is running on 3000, or change `"3000:3000"` to `"3001:3000"` in `compose.yaml` and use http://localhost:3001.
+- **`Could not find the function/table/column ... in the schema cache`, or `relation "..." does not exist`**: your database is missing a migration. In DB tests or against local Supabase, run `npx supabase migration list --local`, then `npx supabase migration up --local`. Against the hosted project, someone needs to run `npx supabase db push` (see [Database](#database)).
+- **`fetch failed` or `ECONNREFUSED 127.0.0.1:54321` in DB tests**: local Supabase isn't running. Start it with `npx supabase start`.
 - **Something is weird after pulling**: reset the container with `docker compose down` and then `docker compose up --build --renew-anon-volumes`.
