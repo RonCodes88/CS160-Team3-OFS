@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { GET as readCart } from "@/app/api/cart/route";
 import { POST as prepare } from "@/app/api/checkout/payment-intent/route";
 import { hashSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 import { confirmCustomerPayment, finalizeWebhookPayment } from "./finalize-backend";
@@ -53,6 +54,9 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
   beforeEach(async () => {
     vi.clearAllMocks(); intents.clear(); refunds.length = 0;
     await cleanupPayments();
+    // A completed checkout can create a fresh active cart through GET /api/cart.
+    const removed = await db.from("carts").delete().eq("customer_id", customer).neq("id", cart);
+    if (removed.error) throw removed.error;
     await update("carts", cart, { status: "ACTIVE" });
     const restored = await db.from("cart_items").update({ quantity: 2 }).eq("cart_id",cart); if (restored.error) throw restored.error;
     await update("products", product, { stock_quantity: 2, price_cents: 250, unit_weight: 1000, is_active: true });
@@ -103,6 +107,78 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
     expect(await rows("order_status_history","order_id",result.orderId!)).toHaveLength(1);
     expect(await rows("notifications","order_id",result.orderId!)).toHaveLength(1);
   });
+  describe("#20 order creation acceptance", () => {
+    it.each(["requires_payment_method", "requires_action", "processing"])(
+      "does not create an order while payment is %s", async (status) => {
+        Object.assign(intents.get(providerId)!, { status, amount_capturable: 0 });
+        expect(await confirm()).toMatchObject({ status: "PENDING" });
+        expect(stripe.paymentIntents.capture).not.toHaveBeenCalled();
+        expect(await rows("orders", "customer_id", customer)).toHaveLength(0);
+        expect(await rows("order_items", "product_id", product)).toHaveLength(0);
+        expect((await rows("carts", "id", cart))[0].status).toBe("ACTIVE");
+      },
+    );
+
+    it("waits for successful capture and links the complete snapshot to the customer and Stripe payment", async () => {
+      stripe.paymentIntents.capture.mockImplementationOnce(async (id) => {
+        expect(await rows("orders", "customer_id", customer)).toHaveLength(0);
+        expect(await rows("order_items", "product_id", product)).toHaveLength(0);
+        const intent = intents.get(id)!;
+        Object.assign(intent, { status: "succeeded", amount_received: intent.amount, amount_capturable: 0 });
+        return { ...intent };
+      });
+      const result = await confirm();
+      expect(result.status).toBe("CAPTURED");
+      const orders = await rows("orders", "customer_id", customer);
+      expect(orders).toHaveLength(1);
+      expect(orders[0]).toMatchObject({ id: result.orderId, customer_id: customer, status: "PAID",
+        subtotal_cents: 500, total_weight: 2000, delivery_fee_cents: 1000, tax_cents: 25, total_cents: 1525,
+        address_id: address, delivery_address: { line_1: "Test", line_2: null, city: "Test", state: "CA", postal_code: "00000" } });
+      expect(orders[0].paid_at).toBeTruthy();
+      const items = await rows("order_items", "order_id", result.orderId!);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ product_id: product, sku: product, product_name: "Test",
+        quantity: 2, unit_price_cents: 250, unit_weight: 1000 });
+      expect((await rows("payment_attempts", "id", attemptId))[0]).toMatchObject({
+        customer_id: customer, order_id: result.orderId, provider_payment_id: providerId, status: "CAPTURED",
+      });
+    });
+
+    it("preserves order snapshots after catalog and saved-address edits", async () => {
+      const result = await confirm();
+      const originalOrder = await rows("orders", "id", result.orderId!);
+      const originalItems = await rows("order_items", "order_id", result.orderId!);
+      try {
+        await update("products", product, { name: "Changed product", price_cents: 999, unit_weight: 50 });
+        await update("addresses", address, { line_1: "Changed street", city: "Changed city",
+          postal_code: "99999", location: "SRID=4326;POINT(1 1)" });
+        expect(await rows("orders", "id", result.orderId!)).toEqual(originalOrder);
+        expect(await rows("order_items", "order_id", result.orderId!)).toEqual(originalItems);
+      } finally {
+        await update("products", product, { name: "Test", price_cents: 250, unit_weight: 1000 });
+        await update("addresses", address, { line_1: "Test", city: "Test", postal_code: "00000",
+          location: "SRID=4326;POINT(0 0)" });
+      }
+    });
+
+    it("returns an empty active cart through the authenticated API after checkout", async () => {
+      const result = await confirm();
+      const response = await readCart(new NextRequest("http://localhost/api/cart", {
+        headers: { cookie: `${SESSION_COOKIE}=${token}` },
+      }));
+      expect(response.status).toBe(200);
+      const fresh = await response.json();
+      expect(fresh.cart_id).not.toBe(cart);
+      expect(fresh).toMatchObject({ items: [], total_weight: 0, subtotal_cents: 0,
+        delivery_fee_cents: 0, total_cents: 0 });
+      expect((await rows("carts", "id", fresh.cart_id))[0]).toMatchObject({ customer_id: customer, status: "ACTIVE" });
+      expect((await rows("carts", "id", cart))[0].status).toBe("CHECKED_OUT");
+      expect(await confirm()).toEqual(result);
+      expect(await rows("cart_items", "cart_id", fresh.cart_id)).toHaveLength(0);
+      expect(await rows("orders", "customer_id", customer)).toHaveLength(1);
+    });
+  });
+
   it("browser and webhook repeats return one order with one capture", async () => {
     const first = await confirm(); expect(await finalizeWebhookPayment(db,providerId)).toEqual(first);
     expect(await confirm()).toEqual(first);
