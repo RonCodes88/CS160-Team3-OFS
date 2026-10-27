@@ -74,6 +74,8 @@ jobs:
           echo "SUPABASE_TEST_SECRET_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
 
       - run: npm run test:db
+      - name: Verify database transaction rollback
+        run: npx supabase test db
 
   # The check job already proves the app builds. The Docker image can only
   # break when these files change, so skip the slow Docker build otherwise.
