@@ -26,6 +26,11 @@ const prefixed =
   (value: string) =>
     prefixes.some((p) => value.startsWith(p)) ? null : `must start with ${prefixes.join(" or ")}${why}`;
 
+const inRange = (min: number, max: number) => (value: string) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max ? null : `must be a number from ${min} to ${max}`;
+};
+
 export const ENV_VARS: readonly EnvVar[] = [
   {
     name: "NEXT_PUBLIC_SUPABASE_URL",
@@ -64,6 +69,21 @@ export const ENV_VARS: readonly EnvVar[] = [
     name: "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN",
     hint: "Mapbox account -> Tokens (a public pk. token, URL-restricted)",
     check: prefixed(["pk."], " (sk. tokens are secret and must not reach the browser)"),
+  },
+  {
+    name: "OFS_STORE_LATITUDE",
+    hint: "the store's latitude in decimal degrees (Downtown San Jose: 37.3352)",
+    check: inRange(-90, 90),
+  },
+  {
+    name: "OFS_STORE_LONGITUDE",
+    hint: "the store's longitude in decimal degrees (Downtown San Jose: -121.8811)",
+    check: inRange(-180, 180),
+  },
+  {
+    name: "OFS_DELIVERY_RADIUS_METERS",
+    hint: "how far from the store addresses can be, in meters (5000)",
+    check: (value) => (Number(value) > 0 && Number.isFinite(Number(value)) ? null : "must be a positive number of meters"),
   },
 ];
 

@@ -10,6 +10,9 @@ const VALID = {
   STRIPE_WEBHOOK_SECRET: "whsec_x",
   MAPBOX_ACCESS_TOKEN: "sk.x",
   NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: "pk.x",
+  OFS_STORE_LATITUDE: "37.3352",
+  OFS_STORE_LONGITUDE: "-121.8811",
+  OFS_DELIVERY_RADIUS_METERS: "5000",
 };
 
 afterEach(() => vi.restoreAllMocks());
