@@ -19,6 +19,7 @@ if (url && !/^http:\/\/(localhost|127\.0\.0\.1|host\.docker\.internal)(:\d+)?\/?
 describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe mocked)", () => {
   let db: SupabaseClient, attemptId: string, providerId: string;
   const customer = randomUUID(), category = randomUUID(), product = randomUUID(), cart = randomUUID(), address = randomUUID();
+  const secondProduct = randomUUID();
   const token = randomBytes(32).toString("hex");
   const expected = { subtotalCents: 500, totalWeight: 2000, deliveryFeeCents: 1000, taxCents: 25, totalCents: 1525 };
   const intents = new Map<string, FinalizationIntent>();
@@ -47,6 +48,8 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
     await insert("auth_sessions", { user_id: customer, token_hash: hashSessionToken(token), expires_at: new Date(Date.now()+3600_000).toISOString() });
     await insert("categories", { id: category, name: "Finalize test", slug: category });
     await insert("products", { id: product, category_id: category, sku: product, name: "Test", price_cents: 250, unit_weight: 1000, stock_quantity: 2 });
+    await insert("products", { id: secondProduct, category_id: category, sku: secondProduct, name: "Second test product",
+      price_cents: 100, unit_weight: 100, stock_quantity: 7 });
     await insert("carts", { id: cart, customer_id: customer });
     await insert("cart_items", { cart_id: cart, product_id: product, quantity: 2 });
     await insert("addresses", { id: address, customer_id: customer, line_1: "Test", city: "Test", state: "CA", postal_code: "00000", location: "SRID=4326;POINT(0 0)" });
@@ -58,6 +61,9 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
     const removed = await db.from("carts").delete().eq("customer_id", customer).neq("id", cart);
     if (removed.error) throw removed.error;
     await update("carts", cart, { status: "ACTIVE" });
+    const removedItem = await db.from("cart_items").delete().eq("cart_id", cart).eq("product_id", secondProduct);
+    if (removedItem.error) throw removedItem.error;
+    await update("products", secondProduct, { stock_quantity: 7 });
     const restored = await db.from("cart_items").update({ quantity: 2 }).eq("cart_id",cart); if (restored.error) throw restored.error;
     await update("products", product, { stock_quantity: 2, price_cents: 250, unit_weight: 1000, is_active: true });
     stripe.paymentIntents.create.mockImplementation(async (params) => {
@@ -91,7 +97,7 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
           const { error }=await db.from("users").delete().eq("id",other); if(error) throw error;
         }
         await cleanupPayments();
-        for (const [table,id] of [["carts",cart],["addresses",address],["products",product],["categories",category],["users",customer]]) {
+        for (const [table,id] of [["carts",cart],["addresses",address],["products",product],["products",secondProduct],["categories",category],["users",customer]]) {
           const { error } = await db.from(table).delete().eq("id", id); if (error) throw error;
         }
       }
@@ -176,6 +182,62 @@ describe.skipIf(!url || !key)("payment finalization against Postgres (Stripe moc
       expect(await confirm()).toEqual(result);
       expect(await rows("cart_items", "cart_id", fresh.cart_id)).toHaveLength(0);
       expect(await rows("orders", "customer_id", customer)).toHaveLength(1);
+    });
+  });
+
+  describe("#21 inventory transaction acceptance", () => {
+    async function prepareTwoProducts() {
+      await cleanupPayments();
+      await insert("cart_items", { cart_id: cart, product_id: secondProduct, quantity: 3 });
+      const prepared = await createCustomerPaymentIntent(db, customer, "checkout-test", {
+        addressId: address,
+        expected: { subtotalCents: 800, totalWeight: 2300, deliveryFeeCents: 1000, taxCents: 40, totalCents: 1840 },
+      });
+      attemptId = prepared.attemptId;
+      providerId = prepared.paymentIntentId;
+    }
+
+    it("deducts each ordered quantity exactly once across browser and webhook retries", async () => {
+      await prepareTwoProducts();
+      const result = await confirm();
+      expect(result.status).toBe("CAPTURED");
+      expect(await rows("order_items", "order_id", result.orderId!)).toHaveLength(2);
+      expect((await rows("products", "id", product))[0].stock_quantity).toBe(0);
+      expect((await rows("products", "id", secondProduct))[0].stock_quantity).toBe(4);
+      expect(await finalizeWebhookPayment(db, providerId)).toEqual(result);
+      expect(await confirm()).toEqual(result);
+      expect((await rows("products", "id", product))[0].stock_quantity).toBe(0);
+      expect((await rows("products", "id", secondProduct))[0].stock_quantity).toBe(4);
+      expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
+    });
+
+    it("refunds once and leaves other stock untouched when one item becomes insufficient after capture", async () => {
+      await prepareTwoProducts();
+      stripe.paymentIntents.capture.mockImplementationOnce(async (id) => {
+        await update("products", secondProduct, { stock_quantity: 2 });
+        const intent = intents.get(id)!;
+        Object.assign(intent, { status: "succeeded", amount_received: intent.amount, amount_capturable: 0 });
+        return { ...intent };
+      });
+      const result = await confirm();
+      expect(result).toMatchObject({ status: "REFUNDED", failureCode: "INSUFFICIENT_STOCK" });
+      expect(await rows("orders", "customer_id", customer)).toHaveLength(0);
+      for (const id of [product, secondProduct]) {
+        expect(await rows("order_items", "product_id", id)).toHaveLength(0);
+      }
+      expect((await rows("products", "id", product))[0].stock_quantity).toBe(2);
+      expect((await rows("products", "id", secondProduct))[0].stock_quantity).toBe(2);
+      expect((await rows("carts", "id", cart))[0].status).toBe("ACTIVE");
+      expect((await rows("payment_attempts", "id", attemptId))[0].order_id).toBeNull();
+      expect(await confirm()).toEqual(result);
+      expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
+      expect(stripe.refunds.create.mock.calls[0][0]).toMatchObject({ payment_intent: providerId, amount: 1840 });
+    });
+
+    it("rejects a negative stock write at the database boundary", async () => {
+      const result = await db.from("products").update({ stock_quantity: -1 }).eq("id", product);
+      expect(result.error?.code).toBe("23514");
+      expect((await rows("products", "id", product))[0].stock_quantity).toBe(2);
     });
   });
 
