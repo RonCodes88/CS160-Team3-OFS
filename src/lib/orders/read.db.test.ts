@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getOrderSummary } from "@/lib/orders/read";
+import { getCustomerOrder, getOrderSummary } from "@/lib/orders/read";
 
 // Runs the order read against a LOCAL Supabase with the migrations applied.
 // Setup: `npx supabase start`, then put SUPABASE_TEST_URL and
@@ -95,5 +95,19 @@ describe.skipIf(!TEST_URL || !TEST_KEY)("getOrderSummary against Postgres", () =
 
   it("returns null for an order that does not exist", async () => {
     expect(await getOrderSummary(db, randomUUID())).toBeNull();
+  });
+
+  it("reads a customer's own order with its status and weight", async () => {
+    expect(await getCustomerOrder(db, customerId, orderId)).toMatchObject({
+      id: orderId,
+      status: "PAID",
+      totalWeight: 1720,
+      totalCents: 898,
+      items: [{ productName: "Whole Milk", quantity: 2, unitPriceCents: 449 }],
+    });
+  });
+
+  it("hides another customer's order", async () => {
+    expect(await getCustomerOrder(db, randomUUID(), orderId)).toBeNull();
   });
 });
