@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { previewCheckout, type CheckoutDependencies, type CheckoutTotals } from "./validation";
 
+// Fresh objects per test allow one rule to change without contaminating another.
+// Tax is deliberately a fixed 40-cent stub here: these tests verify dependency
+// use, while tax.test.ts covers the actual 5% policy. IDs need not be UUIDs at
+// this layer; the HTTP route tests cover that input requirement.
 function fixture(weight = 100) {
   const cart = { customerId: "customer", status: "ACTIVE", items: [{ productId: "apple", quantity: 2 }] };
   const address = { id: "address", customerId: "customer", eligible: true };

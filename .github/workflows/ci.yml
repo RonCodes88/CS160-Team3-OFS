@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage
 
       # Reuse Next.js's incremental build cache between runs.
       - uses: actions/cache@v6
@@ -37,6 +37,43 @@ jobs:
             nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - run: npm run build
+
+  # Runs the *.db.test.ts suites against a throwaway local Supabase. They skip
+  # without SUPABASE_TEST_URL, so the check job above never exercises them.
+  db-tests:
+    name: Database tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Applies supabase/migrations and seed.sql (the auth tests log in as the
+      # seeded demo accounts). The tests only talk to Postgres through the API
+      # gateway (Kong) and PostgREST, so skip the other containers. GoTrue stays:
+      # without it the CLI does not report the API keys.
+      - name: Start local Supabase
+        run: >-
+          npx supabase start
+          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Point the DB tests at local Supabase
+        run: |
+          eval "$(npx supabase status -o env)"
+          if [ -z "$API_URL" ] || [ -z "$SECRET_KEY" ]; then
+            echo "::error::supabase status did not report API_URL and SECRET_KEY"
+            exit 1
+          fi
+          echo "::add-mask::$SECRET_KEY"
+          echo "SUPABASE_TEST_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_SECRET_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
+
+      - run: npm run test:db
 
   # The check job already proves the app builds. The Docker image can only
   # break when these files change, so skip the slow Docker build otherwise.
