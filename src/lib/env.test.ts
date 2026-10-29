@@ -10,6 +10,9 @@ const VALID = {
   STRIPE_WEBHOOK_SECRET: "whsec_x",
   MAPBOX_ACCESS_TOKEN: "sk.x",
   NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: "pk.x",
+  OFS_STORE_LATITUDE: "37.3352",
+  OFS_STORE_LONGITUDE: "-121.8811",
+  OFS_DELIVERY_RADIUS_METERS: "5000",
 };
 
 const messages = (env: Record<string, string | undefined>) => findEnvProblems(env).map((p) => p.message);
@@ -82,6 +85,14 @@ describe("formatEnvProblems", () => {
   });
 });
 
+it("rejects service-area settings that aren't usable numbers", () => {
+  expect(messages({ ...VALID, OFS_STORE_LATITUDE: "91" })).toEqual(["OFS_STORE_LATITUDE must be a number from -90 to 90"]);
+  expect(messages({ ...VALID, OFS_STORE_LONGITUDE: "west" })).toEqual(["OFS_STORE_LONGITUDE must be a number from -180 to 180"]);
+  expect(messages({ ...VALID, OFS_DELIVERY_RADIUS_METERS: "0" })).toEqual([
+    "OFS_DELIVERY_RADIUS_METERS must be a positive number of meters",
+  ]);
+});
+
 describe(".env.example", () => {
   it("lists every variable the app checks, with placeholder values only", async () => {
     const { readFile } = await import("node:fs/promises");
@@ -94,6 +105,10 @@ describe(".env.example", () => {
     );
     for (const v of ENV_VARS) expect(defined.has(v.name), `${v.name} missing from .env.example`).toBe(true);
     // Placeholders end in xxx or are obviously fake, never real-looking keys.
-    for (const [name, value] of defined) expect(value, name).toMatch(/xxx|your-project-ref/);
+    // The service area is public configuration, so its real values are listed.
+    const publicSettings = new Set(["OFS_STORE_LATITUDE", "OFS_STORE_LONGITUDE", "OFS_DELIVERY_RADIUS_METERS"]);
+    for (const [name, value] of defined) {
+      if (!publicSettings.has(name)) expect(value, name).toMatch(/xxx|your-project-ref/);
+    }
   });
 });

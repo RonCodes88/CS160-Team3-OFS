@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createOrderFromPayment } from "@/lib/orders/service";
+import { cancelPendingPayments } from "./cancel";
 import { canonical, PaymentError, scopePaymentKey } from "./service";
 import { finalizePayment, type FinalizationAttempt, type FinalizationDependencies } from "./finalize";
 import { loadPaymentQuote } from "./quote";
@@ -69,4 +70,25 @@ export async function finalizeWebhookPayment(db: SupabaseClient, providerId: str
   // Creation may still be saving the provider ID. Request a retry instead of losing the event.
   if (error || !data) throw new PaymentError(503, "PAYMENT_NOT_LINKED", "Payment is not ready for webhook processing.");
   return finalizePayment(data.id, data.customer_id, finalizationDependencies(db));
+}
+
+/** Abandons the session customer's unauthorized PENDING payments (see cancel.ts). */
+export async function cancelCustomerPayments(db: SupabaseClient, customerId: string) {
+  let stripe;
+  try { stripe = createStripeClient(process.env.STRIPE_SECRET_KEY); }
+  catch { throw new PaymentError(503, "PAYMENT_NOT_CONFIGURED", "Test payments are not configured."); }
+  const finalization = finalizationDependencies(db);
+  return cancelPendingPayments(customerId, {
+    listPending: async (id) => {
+      const { data, error } = await db.from("payment_attempts").select("id,provider_payment_id")
+        .eq("customer_id", id).eq("status", "PENDING").eq("finalize_step", "READY");
+      if (error) throw new PaymentError(503, "PAYMENT_UNAVAILABLE", "Payment lookup is unavailable.");
+      return data;
+    },
+    retrieve: (id) => stripe.paymentIntents.retrieve(id),
+    cancel: async (attempt) => {
+      await stripe.paymentIntents.cancel(attempt.provider_payment_id, {}, { idempotencyKey: `ofs:void:${attempt.id}` });
+    },
+    finalize: (attemptId, id) => finalizePayment(attemptId, id, finalization),
+  });
 }
