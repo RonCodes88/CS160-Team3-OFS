@@ -80,6 +80,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
         const orderId = await insert("orders", {
           customer_id: customerId,
           status: "BATCHED",
+          paid_at: "2026-10-20T12:00:00.000Z",
           trip_id: tripId,
           total_weight: 100,
           delivery_address: {
@@ -206,8 +207,8 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
       await expectUnchanged(tripId);
     });
 
-    it("does not modify the trip when Mapbox fails", async () => {
-      const { tripId } = await makeTrip(1);
+    it("returns assigned orders to the queue when Mapbox fails", async () => {
+      const { tripId, orderIds } = await makeTrip(1);
 
       const routeProvider = vi.fn().mockRejectedValue(
         new Error("Mapbox unavailable"),
@@ -219,7 +220,39 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
 
       expect(routeProvider).toHaveBeenCalledTimes(1);
 
-      await expectUnchanged(tripId);
+      const { data: trip, error: tripError } = await db
+        .from("trips")
+        .select("status, route_geometry")
+        .eq("id", tripId)
+        .single();
+
+      expect(tripError).toBeNull();
+      expect(trip?.status).toBe("ROUTE_FAILED");
+      expect(trip?.route_geometry).toBeNull();
+
+      const { data: orders, error: orderError } = await db
+        .from("orders")
+        .select("id, status, trip_id, paid_at")
+        .eq("id", orderIds[0]);
+
+      expect(orderError).toBeNull();
+      expect(orders).toHaveLength(1);
+      expect(orders?.[0]).toMatchObject({
+        id: orderIds[0],
+        status: "PAID",
+        trip_id: null,
+      });
+      expect(new Date(orders![0].paid_at).toISOString()).toBe(
+        "2026-10-20T12:00:00.000Z",
+      );
+
+      const { data: stops, error: stopError } = await db
+        .from("delivery_stops")
+        .select("id")
+        .eq("trip_id", tripId);
+
+      expect(stopError).toBeNull();
+      expect(stops).toEqual([]);
     });
 
     it("routes a trip by ID and persists the complete plan", async () => {
@@ -431,6 +464,163 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
       expect(error?.message).toMatch(/Unable to save all delivery stops/);
 
       await expectUnchanged(tripId);
+    });
+
+    it("restores original paid times after route failure", async () => {
+      const { tripId, orderIds } = await makeTrip(2);
+      const paidTimes = [
+        "2026-10-20T08:00:00.000Z",
+        "2026-10-20T07:00:00.000Z",
+      ];
+
+      for (const [index, orderId] of orderIds.entries()) {
+        const { error } = await db
+          .from("orders")
+          .update({ paid_at: paidTimes[index] })
+          .eq("id", orderId);
+
+        expect(error).toBeNull();
+      }
+
+      const { error } = await db.rpc("fail_trip_route", {
+        p_trip_id: tripId,
+        p_failure_code: "PROVIDER_ERROR",
+      });
+
+      expect(error).toBeNull();
+
+      const { data: trip } = await db
+        .from("trips")
+        .select("status, route_geometry")
+        .eq("id", tripId)
+        .single();
+
+      expect(trip?.status).toBe("ROUTE_FAILED");
+      expect(trip?.route_geometry).toBeNull();
+
+      const { data: orders } = await db
+        .from("orders")
+        .select("id, status, trip_id, paid_at")
+        .in("id", orderIds)
+        .order("paid_at")
+        .order("id");
+
+      expect(orders?.map((order) => order.id)).toEqual([
+        orderIds[1],
+        orderIds[0],
+      ]);
+
+      expect(orders?.map((order) => ({
+        status: order.status,
+        tripId: order.trip_id,
+        paidAt: new Date(order.paid_at).toISOString(),
+      }))).toEqual([
+        { status: "PAID", tripId: null, paidAt: paidTimes[1] },
+        { status: "PAID", tripId: null, paidAt: paidTimes[0] },
+      ]);
+
+      const { data: history } = await db
+        .from("order_status_history")
+        .select("order_id, status, notes")
+        .in("order_id", orderIds);
+
+      expect(history).toHaveLength(2);
+      expect(history?.every((entry) =>
+        entry.status === "PAID" &&
+        entry.notes?.toLowerCase().includes("route")
+      )).toBe(true);
+    });
+
+    it("is safe to repeat failure recovery", async () => {
+      const { tripId, orderIds } = await makeTrip(1);
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { error } = await db.rpc("fail_trip_route", {
+          p_trip_id: tripId,
+          p_failure_code: "PROVIDER_ERROR",
+        });
+        expect(error).toBeNull();
+      }
+
+      const { data: history, error: historyError } = await db
+        .from("order_status_history")
+        .select("id, status")
+        .eq("order_id", orderIds[0]);
+
+      expect(historyError).toBeNull();
+      expect(history).toHaveLength(1);
+      expect(history?.[0].status).toBe("PAID");
+    });
+
+    it("does not affect orders assigned to another trip", async () => {
+      const failingTrip = await makeTrip(2);
+      const otherTrip = await makeTrip(1);
+
+      const { error } = await db.rpc("fail_trip_route", {
+        p_trip_id: failingTrip.tripId,
+        p_failure_code: "PROVIDER_ERROR",
+      });
+
+      expect(error).toBeNull();
+
+      const { data: order, error: orderError } = await db
+        .from("orders")
+        .select("status, trip_id")
+        .eq("id", otherTrip.orderIds[0])
+        .single();
+
+      expect(orderError).toBeNull();
+      expect(order).toMatchObject({
+        status: "BATCHED",
+        trip_id: otherTrip.tripId,
+      });
+
+      const { data: trip, error: tripError } = await db
+        .from("trips")
+        .select("status")
+        .eq("id", otherTrip.tripId)
+        .single();
+
+      expect(tripError).toBeNull();
+      expect(trip?.status).toBe("PLANNED");
+    });
+
+    it("rejects invalid assigned orders without partial recovery", async () => {
+      const { tripId, orderIds } = await makeTrip(2);
+
+      const { error: updateError } = await db
+        .from("orders")
+        .update({ status: "DELIVERED" })
+        .eq("id", orderIds[1]);
+
+      expect(updateError).toBeNull();
+
+      const { error } = await db.rpc("fail_trip_route", {
+        p_trip_id: tripId,
+        p_failure_code: "PROVIDER_ERROR",
+      });
+
+      expect(error?.message).toMatch(/cannot return to the queue/);
+
+      const { data: trip } = await db
+        .from("trips")
+        .select("status")
+        .eq("id", tripId)
+        .single();
+
+      expect(trip?.status).toBe("PLANNED");
+
+      const { data: orders } = await db
+        .from("orders")
+        .select("status, trip_id")
+        .in("id", orderIds);
+
+      expect(orders?.map((order) => order.status).sort()).toEqual([
+        "BATCHED",
+        "DELIVERED",
+      ]);
+
+      expect(orders?.every((order) => order.trip_id === tripId)).toBe(true);
     });
 
     it("rejects duplicate delivery stops", async () => {
