@@ -6,17 +6,43 @@ import {
   type OptimizationOptions,
   type OptimizedTripRoute,
 } from "./optimization";
+import { RoutingError } from "./mapbox";
 import { persistOptimizedTrip } from "./persistence";
 
 // Optimize and save the route using stops loaded by trusted server-side code.
-// Route failures are left to the caller (Issue #27).
 export async function routeTrip(
   db: SupabaseClient,
   tripId: string,
   stops: readonly DeliveryOrderStop[],
   options: OptimizationOptions = {},
 ): Promise<OptimizedTripRoute> {
-  const plan = await optimizeTripRoute(stops, options);
+  let plan: OptimizedTripRoute;
+
+  try {
+    plan = await optimizeTripRoute(stops, options);
+  } catch (error) {
+    // Bad input shouldn't fail a trip.
+    if (error instanceof RoutingError && error.code === "INVALID_REQUEST" && error.status === undefined) {
+      throw error;
+    }
+
+    const failureCode =
+      error instanceof RoutingError ? error.code : "PROVIDER_ERROR";
+
+    const { error: recoveryError } = await db.rpc("fail_trip_route", {
+      p_trip_id: tripId,
+      p_failure_code: failureCode,
+    });
+
+    if (recoveryError) {
+      throw new Error(
+        `Failed to recover trip after routing failure: ${recoveryError.message}`,
+        { cause: error },
+      );
+    }
+
+    throw error;
+  }
 
   await persistOptimizedTrip(db, tripId, plan);
 
