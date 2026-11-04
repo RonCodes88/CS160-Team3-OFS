@@ -46,7 +46,7 @@ export default async function Page({ params }: PageProps<"/orders/[orderId]">) {
         Thanks! Your order is confirmed.
       </h1>
       <p className="mt-3 text-lg text-pencil/70">
-        Order <span className="font-mono text-base">{order.id}</span>. WeWe emailed you a receipt.apos;ll email you a receipt.
+        Order <span className="font-mono text-base">{order.id}</span>. We&apos;ll email you a receipt.
       </p>
 
       <div className="mt-8 space-y-8">

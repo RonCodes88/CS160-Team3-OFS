@@ -1,9 +1,11 @@
 import Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import { finalizeWebhookPayment } from "@/lib/payments/finalize-backend";
 import { PaymentError } from "@/lib/payments/service";
 
+vi.mock("@/lib/notifications/service", () => ({ sendNotificationsAfterResponse: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/payments/finalize-backend", () => ({ finalizeWebhookPayment: vi.fn() }));
 const secret = "whsec_fixture";
@@ -23,6 +25,16 @@ describe("Stripe webhook endpoint", () => {
   it("passes only the verified provider ID to finalization, without customer cookies", async () => {
     expect((await call()).status).toBe(200);
     expect(finalizeWebhookPayment).toHaveBeenCalledWith({}, "pi_test");
+  });
+  it("sends notifications once the order exists", async () => {
+    await call();
+    expect(sendNotificationsAfterResponse).toHaveBeenCalledOnce();
+  });
+  it("sends nothing when the event creates no order", async () => {
+    vi.mocked(finalizeWebhookPayment).mockResolvedValue({ attemptId: "attempt", status: "VOIDED" });
+    await call();
+    await call({ ...event, type: "customer.created" });
+    expect(sendNotificationsAfterResponse).not.toHaveBeenCalled();
   });
   it("rejects invalid signatures before database processing", async () => {
     expect((await call(event, false)).status).toBe(400); expect(finalizeWebhookPayment).not.toHaveBeenCalled();

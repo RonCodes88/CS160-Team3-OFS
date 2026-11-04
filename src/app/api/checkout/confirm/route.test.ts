@@ -2,8 +2,10 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import { getSessionUser } from "@/lib/auth/session";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import { confirmCustomerPayment } from "@/lib/payments/finalize-backend";
 
+vi.mock("@/lib/notifications/service", () => ({ sendNotificationsAfterResponse: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/auth/session", () => ({ getSessionUser: vi.fn() }));
 vi.mock("@/lib/payments/finalize-backend", () => ({ confirmCustomerPayment: vi.fn() }));
@@ -45,6 +47,17 @@ describe("customer payment confirmation", () => {
   it("returns 202 while customer authentication or provider processing remains pending", async () => {
     vi.mocked(confirmCustomerPayment).mockResolvedValue({ attemptId:id,status:"PENDING",providerStatus:"requires_action" });
     expect((await call()).status).toBe(202);
+  });
+  it("sends notifications once the order exists", async () => {
+    await call();
+    expect(sendNotificationsAfterResponse).toHaveBeenCalledOnce();
+  });
+  it("sends nothing while no order exists", async () => {
+    vi.mocked(confirmCustomerPayment).mockResolvedValue({ attemptId:id,status:"PENDING",providerStatus:"requires_action" });
+    await call();
+    vi.mocked(confirmCustomerPayment).mockRejectedValue(new Error("private"));
+    await call();
+    expect(sendNotificationsAfterResponse).not.toHaveBeenCalled();
   });
   it("returns a retryable response without leaking unexpected errors", async () => {
     vi.mocked(confirmCustomerPayment).mockRejectedValue(new Error("private"));
