@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Route } from "./mapbox";
+import { RoutingError, type Route } from "./mapbox";
 import { routeTrip } from "./service";
 
 const tripId = "11111111-1111-4111-8111-111111111111";
@@ -79,12 +79,12 @@ describe("routeTrip", () => {
     );
   });
 
-  it("does not save anything when routing fails", async () => {
+  it("recovers orders when routing fails", async () => {
     const routeProvider = vi.fn().mockRejectedValue(
       new Error("Mapbox unavailable"),
     );
 
-    const rpc = vi.fn();
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
     const db = { rpc } as unknown as SupabaseClient;
 
     await expect(
@@ -95,8 +95,11 @@ describe("routeTrip", () => {
       }),
     ).rejects.toThrow("Mapbox unavailable");
 
-    // A routing failure should stop the process before any database write.
-    expect(rpc).not.toHaveBeenCalled();
+        expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith(
+      "fail_trip_route",
+      expect.objectContaining({ p_trip_id: tripId }),
+    );
   });
 
   it("reports persistence failure", async () => {
@@ -118,5 +121,81 @@ describe("routeTrip", () => {
     ).rejects.toThrow("Database write failed");
 
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("route failure recovery (Issue #27)", () => {
+  it("does not recover invalid route inputs", async () => {
+    const rpc = vi.fn();
+    const routeProvider = vi.fn();
+    const db = { rpc } as unknown as SupabaseClient;
+
+    await expect(
+      routeTrip(db, tripId, [], { origin, departureTime, routeProvider }),
+    ).rejects.toThrow("between 1 and");
+
+    expect(routeProvider).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("requests atomic recovery when route generation fails", async () => {
+    const routeProvider = vi.fn().mockRejectedValue(
+      new Error("Mapbox unavailable"),
+    );
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const db = { rpc } as unknown as SupabaseClient;
+
+    await expect(
+      routeTrip(db, tripId, stops, {
+        origin,
+        departureTime,
+        routeProvider,
+      }),
+    ).rejects.toThrow("Mapbox unavailable");
+
+    expect(rpc).toHaveBeenCalledWith(
+      "fail_trip_route",
+      expect.objectContaining({ p_trip_id: tripId }),
+    );
+  });
+});
+
+describe("Mapbox rejection recovery (Issue #27)", () => {
+  it("recovers after Mapbox HTTP 422", async () => {
+    const routeProvider = vi.fn().mockRejectedValue(
+      new RoutingError(
+        "INVALID_REQUEST",
+        "Mapbox rejected the route request.",
+        422,
+      ),
+    );
+
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+
+    const db = { rpc } as unknown as SupabaseClient;
+
+    await expect(
+      routeTrip(db, tripId, stops, {
+        origin,
+        departureTime,
+        routeProvider,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      status: 422,
+    });
+
+    expect(routeProvider).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("fail_trip_route", {
+      p_trip_id: tripId,
+      p_failure_code: "INVALID_REQUEST",
+    });
   });
 });
