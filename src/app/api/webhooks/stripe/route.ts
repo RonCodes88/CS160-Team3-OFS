@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyPaymentWebhook } from "@/lib/payments/webhook";
 import { finalizeWebhookPayment } from "@/lib/payments/finalize-backend";
@@ -11,7 +12,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const event = verifyPaymentWebhook(Stripe.webhooks, await request.text(),
       request.headers.get("Stripe-Signature"), process.env.STRIPE_WEBHOOK_SECRET);
-    if (event) await finalizeWebhookPayment(createAdminClient(), event.paymentIntentId);
+    if (event) {
+      const result = await finalizeWebhookPayment(createAdminClient(), event.paymentIntentId);
+      if (result.orderId) sendNotificationsAfterResponse();
+    }
     // A relevant event is acknowledged only after successful durable processing.
     return Response.json({ received: true });
   } catch (error) {

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/requireRole";
 import { readJsonBody } from "@/lib/auth/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/inventory/validation";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import { confirmCustomerPayment } from "@/lib/payments/finalize-backend";
 import { PaymentError } from "@/lib/payments/service";
 
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const id = (json.body as { attemptId?: unknown } | null)?.attemptId;
     if (typeof id !== "string" || !isUuid(id)) throw new PaymentError(400, "INVALID_REQUEST", "attemptId must be a UUID.");
     const result = await confirmCustomerPayment(db, auth.user.id, id.toLowerCase(), key);
+    if (result.orderId) sendNotificationsAfterResponse();
     if (result.failureCode) return noStore(Response.json({ ...result,
       error: { code: result.failureCode, message: "Payment did not complete this purchase. Review checkout before trying again." } }, { status: 422 }));
     return noStore(Response.json(result, { status: result.status === "PENDING" ? 202 : 200 }));

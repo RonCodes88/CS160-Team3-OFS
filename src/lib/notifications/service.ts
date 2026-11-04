@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { renderMessage } from "@/lib/notifications/messages";
 import { getNotificationSender, type NotificationSender } from "@/lib/notifications/sender";
 import { createNotificationStore, type NotificationStore } from "@/lib/notifications/store";
@@ -45,12 +46,22 @@ export async function processPendingNotifications(
   return result;
 }
 
-/**
- * Entry point for whatever runs the sender: e.g. the batching job that already
- * runs every minute, or a call right after checkout commits.
- */
+/** Entry point for whatever runs the sender, such as a recurring job. */
 export async function sendPendingNotifications(limit = DEFAULT_BATCH_SIZE): Promise<ProcessResult> {
   return processPendingNotifications(createNotificationStore(createAdminClient()), getNotificationSender(), {
     limit,
   });
+}
+
+/**
+ * Sends queued notifications once the response has gone out. Checkout calls
+ * this after an order commits, so it never waits on (or fails because of)
+ * sending. Anything left unsent stays queued for the next send.
+ */
+export function sendNotificationsAfterResponse(): void {
+  try {
+    after(() => sendPendingNotifications().catch(console.error));
+  } catch (err) {
+    console.error(err);
+  }
 }

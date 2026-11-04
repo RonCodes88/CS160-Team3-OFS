@@ -1,8 +1,13 @@
+import { after } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderSummary } from "@/lib/notifications/messages";
 import type { NotificationSender } from "@/lib/notifications/sender";
-import { processPendingNotifications } from "@/lib/notifications/service";
+import { processPendingNotifications, sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import type { ClaimedNotification, NotificationStore } from "@/lib/notifications/store";
+
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock("next/server", () => ({ after: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
 
 const ORDER: OrderSummary = {
   id: "3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41",
@@ -105,5 +110,42 @@ describe("processPendingNotifications", () => {
     const store = fakeStore([]);
     expect(await processPendingNotifications(store, sender)).toEqual({ sent: 0, failed: 0 });
     expect(sender.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendNotificationsAfterResponse", () => {
+  const scheduled = () => vi.mocked(after).mock.calls[0][0] as () => Promise<unknown>;
+
+  beforeEach(() => {
+    vi.mocked(after).mockReset();
+    rpc.mockReset();
+  });
+
+  it("does nothing until the response has gone out, then sends the queue", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    sendNotificationsAfterResponse();
+    expect(rpc).not.toHaveBeenCalled();
+
+    await scheduled()();
+    expect(rpc).toHaveBeenCalledWith("claim_notifications", expect.anything());
+  });
+
+  it("logs a failed send instead of throwing", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "db down" } });
+
+    sendNotificationsAfterResponse();
+
+    await expect(scheduled()()).resolves.toBeUndefined();
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("never lets scheduling problems reach checkout", () => {
+    vi.mocked(after).mockImplementation(() => {
+      throw new Error("outside a request");
+    });
+
+    expect(() => sendNotificationsAfterResponse()).not.toThrow();
+    expect(console.error).toHaveBeenCalled();
   });
 });
