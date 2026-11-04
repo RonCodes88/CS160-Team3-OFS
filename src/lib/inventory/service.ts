@@ -8,6 +8,12 @@ export type InventoryItem = {
   sku: string;
   name: string;
   categoryId: string;
+  description: string;
+  imageUrl: string | null;
+  /** Integer cents. */
+  priceCents: number;
+  /** Hundredths of a pound. */
+  unitWeight: number;
   stockQuantity: number;
   updatedAt: string;
 };
@@ -31,6 +37,10 @@ type ProductRow = {
   sku: string;
   name: string;
   category_id: string;
+  description: string;
+  image_url: string | null;
+  price_cents: number;
+  unit_weight: number;
   stock_quantity: number;
   updated_at: string;
 };
@@ -43,7 +53,10 @@ type SetQuantityRow = {
   updated_at: string;
 };
 
-const INVENTORY_COLUMNS = "id, sku, name, category_id, stock_quantity, updated_at";
+// The editable product fields come along so the staff dashboard can prefill
+// the manager's edit form without another request.
+const INVENTORY_COLUMNS =
+  "id, sku, name, category_id, description, image_url, price_cents, unit_weight, stock_quantity, updated_at";
 
 function toItem(row: ProductRow): InventoryItem {
   return {
@@ -51,6 +64,10 @@ function toItem(row: ProductRow): InventoryItem {
     sku: row.sku,
     name: row.name,
     categoryId: row.category_id,
+    description: row.description,
+    imageUrl: row.image_url,
+    priceCents: row.price_cents,
+    unitWeight: row.unit_weight,
     stockQuantity: row.stock_quantity,
     updatedAt: row.updated_at,
   };

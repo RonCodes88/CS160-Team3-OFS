@@ -214,6 +214,21 @@ describe.skipIf(!TEST_URL || !TEST_KEY)("staff inventory API against Postgres", 
       expect(apples).toEqual([products.apples]);
     });
 
+    it("includes the editable product fields with each item", async () => {
+      const response = await getInventory(
+        request(`/api/staff/inventory?q=APPLES-${run}`, users.employee.token),
+      );
+      const { items } = (await response.json()) as { items: unknown[] };
+      expect(items[0]).toMatchObject({
+        productId: products.apples,
+        categoryId,
+        description: "",
+        imageUrl: null,
+        priceCents: 299,
+        unitWeight: 100,
+      });
+    });
+
     it("searches by SKU", async () => {
       const ids = await listed(`/api/staff/inventory?q=APPLES-${run}`, users.employee.token);
       expect(ids).toEqual([products.apples]);
