@@ -120,3 +120,17 @@ Ask the team before adding a new package. All of these are installed by `npm ci`
 - **`Could not find the function/table/column ... in the schema cache`, or `relation "..." does not exist`**: your database is missing a migration. In DB tests or against local Supabase, run `npx supabase migration list --local`, then `npx supabase migration up --local`. Against the hosted project, someone needs to run `npx supabase db push` (see [Database](#database)).
 - **`fetch failed` or `ECONNREFUSED 127.0.0.1:54321` in DB tests**: local Supabase isn't running. Start it with `npx supabase start`.
 - **Something is weird after pulling**: reset the container with `docker compose down` and then `docker compose up --build --renew-anon-volumes`.
+
+### Delivery worker
+
+Run `npm run delivery:worker` in a separate terminal after starting local Supabase
+and applying migrations. It reads `.env.local`, including the backend Supabase
+credentials and Mapbox configuration used by the routing service.
+`OFS_DELIVERY_WAIT_MINUTES` defaults to 20 and must be positive.
+
+The worker checks immediately on startup, then once per minute without overlapping
+ticks. Trips with 10 orders, 200 lb, or an expired oldest-order wait are atomically
+assigned and handed to routing. Other orders stay queued. “Immediately when full”
+means the next worker check (normally within a minute). Routing eligibility does
+not mark a vehicle OUT_FOR_DELIVERY. Keep the worker running separately from Next.js;
+`npm run delivery:worker -- --once` performs one tick. Ctrl+C stops after in-flight work.
