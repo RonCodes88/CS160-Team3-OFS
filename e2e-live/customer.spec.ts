@@ -218,6 +218,8 @@ test("an employee updates stock from the dashboard; only the manager sees the au
   // The manager retires the product, finds it under Retired, and brings it back.
   await managerPage.getByRole("searchbox").fill(product.sku);
   await managerPage.keyboard.press("Enter");
+  // Wait for the search to narrow the list to this one product.
+  await expect(managerPage.getByLabel("Stock", { exact: true })).toHaveCount(1);
   await managerPage.getByRole("button", { name: "Retire", exact: true }).click();
   await managerPage.getByRole("button", { name: "Yes, retire" }).click();
   await expect(managerPage.getByText(`${product.name} was retired.`)).toBeVisible();
