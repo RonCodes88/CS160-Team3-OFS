@@ -94,3 +94,45 @@ export async function getCustomerOrder(db: SupabaseClient, customerId: string, o
     })),
   };
 }
+
+/** One line of the customer's order list. */
+export type CustomerOrderListItem = {
+  id: string;
+  status: string;
+  totalCents: number;
+  paidAt: string | null;
+  itemCount: number;
+};
+
+type CustomerOrderListRow = {
+  id: string;
+  status: string;
+  total_cents: number;
+  paid_at: string | null;
+  order_items: { quantity: number }[];
+};
+
+/**
+ * The customer's most recent orders, newest first. customerId must come from a
+ * verified session.
+ */
+export async function listCustomerOrders(
+  db: SupabaseClient,
+  customerId: string,
+  limit = 20,
+): Promise<CustomerOrderListItem[]> {
+  const { data, error } = await db
+    .from("orders")
+    .select("id, status, total_cents, paid_at, order_items(quantity)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listing orders for ${customerId} failed: ${error.message}`);
+  return (data as CustomerOrderListRow[]).map((row) => ({
+    id: row.id,
+    status: row.status,
+    totalCents: row.total_cents,
+    paidAt: row.paid_at,
+    itemCount: row.order_items.reduce((sum, item) => sum + item.quantity, 0),
+  }));
+}

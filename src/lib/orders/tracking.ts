@@ -12,6 +12,8 @@ export type CustomerTracking = {
     longitude: number;
     updatedAt: string;
   } | null;
+  /** Where this order is being delivered, from its checkout snapshot. */
+  destination: { latitude: number; longitude: number } | null;
 };
 
 export type CustomerTrackingResult =
@@ -60,7 +62,7 @@ export async function getCustomerTracking(
 ): Promise<CustomerTrackingResult> {
   const { data: order, error: orderError } = await db
     .from("orders")
-    .select("id, customer_id, status, trip_id")
+    .select("id, customer_id, status, trip_id, location")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -82,6 +84,7 @@ export async function getCustomerTracking(
     estimatedArrival: null,
     route: null,
     robotLocation: null,
+    destination: decodeVehiclePoint(order.location),
   };
 
   if (!order.trip_id) {

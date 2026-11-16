@@ -51,6 +51,7 @@ const tracking = {
     longitude: -121.89,
     updatedAt: "2026-11-10T19:00:00.000Z",
   },
+  destination: { latitude: 37.3361, longitude: -121.8945 },
 };
 
 beforeEach(() => {
@@ -151,6 +152,7 @@ describe("GET /api/orders/[orderId]/tracking", () => {
       estimatedArrival: null,
       route: null,
       robotLocation: null,
+      destination: null,
     };
 
     vi.mocked(getCustomerTracking).mockResolvedValue({

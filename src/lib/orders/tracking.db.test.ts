@@ -190,6 +190,8 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
         Date.parse(etaA),
       );
 
+      expect(result.tracking.destination?.latitude).toBeCloseTo(37.33, 6);
+      expect(result.tracking.destination?.longitude).toBeCloseTo(-121.89, 6);
       expect(result.tracking.robotLocation?.latitude).toBeCloseTo(37.331, 6);
       expect(result.tracking.robotLocation?.longitude).toBeCloseTo(-121.891, 6);
       expect(Date.parse(result.tracking.robotLocation!.updatedAt)).toBe(
@@ -242,6 +244,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
           estimatedArrival: null,
           route: null,
           robotLocation: null,
+          destination: { latitude: expect.closeTo(37.35, 6), longitude: expect.closeTo(-121.87, 6) },
         },
       });
     });
@@ -259,6 +262,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
           estimatedArrival: null,
           route,
           robotLocation: null,
+          destination: { latitude: expect.closeTo(37.36, 6), longitude: expect.closeTo(-121.86, 6) },
         },
       });
     });

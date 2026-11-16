@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
-import { getOrderSummary } from "@/lib/orders/read";
+import { getOrderSummary, listCustomerOrders } from "@/lib/orders/read";
 
 const ORDER_ID = "3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41";
 
@@ -62,5 +62,39 @@ describe("getOrderSummary", () => {
     await expect(getOrderSummary(db, ORDER_ID)).rejects.toThrow(
       `loading order ${ORDER_ID} failed: permission denied`,
     );
+  });
+});
+
+describe("listCustomerOrders", () => {
+  function listClient(result: unknown) {
+    const limit = vi.fn(async () => result);
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ select }));
+    return { db: { from } as unknown as SupabaseClient, eq, order, limit };
+  }
+
+  it("lists only the given customer's orders, newest first, with item counts", async () => {
+    const { db, eq, order, limit } = listClient({
+      data: [
+        { id: "o2", status: "OUT_FOR_DELIVERY", total_cents: 1898, paid_at: "2026-11-15T20:00:00Z", order_items: [{ quantity: 2 }, { quantity: 1 }] },
+        { id: "o1", status: "DELIVERED", total_cents: 499, paid_at: null, order_items: [] },
+      ],
+      error: null,
+    });
+
+    expect(await listCustomerOrders(db, "customer-1", 5)).toEqual([
+      { id: "o2", status: "OUT_FOR_DELIVERY", totalCents: 1898, paidAt: "2026-11-15T20:00:00Z", itemCount: 3 },
+      { id: "o1", status: "DELIVERED", totalCents: 499, paidAt: null, itemCount: 0 },
+    ]);
+    expect(eq).toHaveBeenCalledWith("customer_id", "customer-1");
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(limit).toHaveBeenCalledWith(5);
+  });
+
+  it("throws when the database fails", async () => {
+    const { db } = listClient({ data: null, error: { message: "down" } });
+    await expect(listCustomerOrders(db, "customer-1")).rejects.toThrow("down");
   });
 });
