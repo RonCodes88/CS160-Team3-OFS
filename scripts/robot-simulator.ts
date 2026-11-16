@@ -18,6 +18,8 @@ async function main() {
   });
   const pollMs = milliseconds("OFS_ROBOT_POLL_MS", 5000, 100);
   const stepMs = milliseconds("OFS_ROBOT_STEP_MS", 500, 0);
+  const driveSteps = Number(process.env.OFS_ROBOT_DRIVE_STEPS ?? 0);
+  const arrivalWaitMs = milliseconds("OFS_ROBOT_ARRIVAL_WAIT_MS", stepMs, 0);
   let stopping = false;
   let wake: (() => void) | undefined;
   for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { stopping = true; wake?.(); });
@@ -29,7 +31,7 @@ async function main() {
   console.info("Robot simulator started. Reports destination locations and delivery acknowledgements over HTTP.");
   do {
     try {
-      const result = await simulateAssignedTrip(client, { stepMs, pause, shouldStop: () => stopping });
+      const result = await simulateAssignedTrip(client, { stepMs, arrivalWaitMs, driveSteps, pause, shouldStop: () => stopping });
       console.info(result.tripId ? `Trip ${result.tripId}: ${result.delivered} delivery acknowledgements.` : "No assigned trip.");
     } catch (error) {
       console.error(error instanceof Error ? error.message : "Robot simulator failed.");

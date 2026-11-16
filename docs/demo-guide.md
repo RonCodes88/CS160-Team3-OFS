@@ -60,6 +60,22 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 6. Sign in as a manager. Edit a product, inspect the audit log, and explain retirement.
 7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. Open `/track` as the customer to follow the robot on the map.
 
+## Run the whole flow from the website
+
+For a demo where someone else clicks through as a customer, let the website run the background jobs itself. Add these lines to `.env.local` and restart the site:
+
+```text
+OFS_IN_APP_WORKERS=true
+OFS_IN_APP_ROBOT=true
+OFS_ROBOT_EMAIL=<a VEHICLE account>
+OFS_ROBOT_PASSWORD=<its password>
+OFS_DELIVERY_WAIT_MINUTES=1
+```
+
+After payment, the order joins a trip within about two minutes. The simulated robot then drives along the road route on the tracking map, waits 30 seconds at the door, and marks the order delivered. If email is configured (see [run-workers.md](run-workers.md#configure-email-delivery)), the customer receives the confirmation, departure, arrival, and delivery emails.
+
+`OFS_DELIVERY_WAIT_MINUTES=1` shortens the 20-minute wait so one order leaves quickly. Explain that the production rule is 20 minutes. Run the jobs in only one copy of the site per database, and do not also start the worker scripts.
+
 ## Explain the testing in 30 seconds
 
 | Layer | What it proves | Command |

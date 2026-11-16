@@ -55,6 +55,38 @@ function decodeVehiclePoint(value: unknown) {
   return { latitude, longitude };
 }
 
+type LngLat = [number, number];
+
+/**
+ * The trip's road route, cut off at this customer's stop. Stops after it are
+ * other customers' homes, so this customer's line must not lead there.
+ * Returns null for a missing or malformed route.
+ */
+export function routeToDestination(
+  route: unknown,
+  destination: { latitude: number; longitude: number } | null,
+): { type: "LineString"; coordinates: LngLat[] } | null {
+  if (!destination || !route || typeof route !== "object") return null;
+  const { type, coordinates } = route as Record<string, unknown>;
+  if (type !== "LineString" || !Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const points: LngLat[] = [];
+  for (const pair of coordinates) {
+    if (!Array.isArray(pair) || !Number.isFinite(pair[0]) || !Number.isFinite(pair[1])) return null;
+    points.push([pair[0], pair[1]]);
+  }
+
+  let end = 0;
+  let best = Infinity;
+  points.forEach(([lng, lat], index) => {
+    const distance = (lng - destination.longitude) ** 2 + (lat - destination.latitude) ** 2;
+    if (distance < best) {
+      best = distance;
+      end = index;
+    }
+  });
+  return { type: "LineString", coordinates: points.slice(0, Math.max(end, 1) + 1) };
+}
+
 export async function getCustomerTracking(
   db: SupabaseClient,
   customerId: string,
@@ -103,7 +135,7 @@ export async function getCustomerTracking(
 
   if (trip) {
     tracking.tripStatus = trip.status;
-    tracking.route = trip.route_geometry;
+    tracking.route = routeToDestination(trip.route_geometry, tracking.destination);
   }
 
   const { data: stop, error: stopError } = await db

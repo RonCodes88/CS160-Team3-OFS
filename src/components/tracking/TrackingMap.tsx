@@ -1,7 +1,7 @@
 "use client";
 
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Bot, Home, Store } from "lucide-react";
 import Map, { Layer, Marker, Source } from "react-map-gl/mapbox";
 import { mapBounds, type LngLat } from "./trackingStatus";
@@ -29,45 +29,56 @@ function Pin({ label, className, children }: { label: string; className: string;
 
 /** Mapbox map of a robot trip. It only draws what it is given. */
 export function TrackingMap({ route, store, destination, robot }: Props) {
+  const [streetsFailed, setStreetsFailed] = useState(false);
   const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   if (!token) {
     return <p className="p-6 text-center text-lg">The map isn&apos;t configured on this server.</p>;
   }
 
   return (
-    <Map
-      mapboxAccessToken={token}
-      initialViewState={{ bounds: mapBounds([...route, store, ...(destination ? [destination] : [])]), fitBoundsOptions: { padding: 56 } }}
-      mapStyle="mapbox://styles/mapbox/streets-v12"
-      style={{ width: "100%", height: "100%" }}
-    >
-      <Source type="geojson" data={{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: route } }}>
-        <Layer
-          type="line"
-          layout={{ "line-cap": "round", "line-join": "round" }}
-          paint={{ "line-color": "#2d5da1", "line-width": 5, "line-opacity": 0.8 }}
-        />
-      </Source>
+    <div className="relative h-full w-full">
+      <Map
+        // A rejected token or a network problem only loses the street tiles. The
+        // route and pins still draw, so say so instead of logging every tile.
+        onError={() => setStreetsFailed(true)}
+        mapboxAccessToken={token}
+        initialViewState={{ bounds: mapBounds([...route, store, ...(destination ? [destination] : [])]), fitBoundsOptions: { padding: 56 } }}
+        mapStyle="mapbox://styles/mapbox/streets-v12"
+        style={{ width: "100%", height: "100%" }}
+      >
+        <Source type="geojson" data={{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: route } }}>
+          <Layer
+            type="line"
+            layout={{ "line-cap": "round", "line-join": "round" }}
+            paint={{ "line-color": "#2d5da1", "line-width": 5, "line-opacity": 0.8 }}
+          />
+        </Source>
 
-      <Marker longitude={store[0]} latitude={store[1]} anchor="center">
-        <Pin label="Store" className="h-9 w-9 bg-white">
-          <Store aria-hidden strokeWidth={2.5} className="h-5 w-5" />
-        </Pin>
-      </Marker>
-      {destination && (
-        <Marker longitude={destination[0]} latitude={destination[1]} anchor="center">
-          <Pin label="Your delivery address" className="h-9 w-9 bg-marker text-white">
-            <Home aria-hidden strokeWidth={2.5} className="h-5 w-5" />
+        <Marker longitude={store[0]} latitude={store[1]} anchor="center">
+          <Pin label="Store" className="h-9 w-9 bg-white">
+            <Store aria-hidden strokeWidth={2.5} className="h-5 w-5" />
           </Pin>
         </Marker>
+        {destination && (
+          <Marker longitude={destination[0]} latitude={destination[1]} anchor="center">
+            <Pin label="Your delivery address" className="h-9 w-9 bg-marker text-white">
+              <Home aria-hidden strokeWidth={2.5} className="h-5 w-5" />
+            </Pin>
+          </Marker>
+        )}
+        {robot && (
+          <Marker longitude={robot[0]} latitude={robot[1]} anchor="center">
+            <Pin label="Robot" className="h-11 w-11 bg-postit">
+              <Bot aria-hidden strokeWidth={2.5} className="h-6 w-6" />
+            </Pin>
+          </Marker>
+        )}
+      </Map>
+      {streetsFailed && (
+        <p role="status" className="absolute inset-x-2 bottom-2 rounded-wobbly border-2 border-pencil bg-white/90 px-3 py-1 text-base">
+          The street map couldn&apos;t load. The route and robot are still shown.
+        </p>
       )}
-      {robot && (
-        <Marker longitude={robot[0]} latitude={robot[1]} anchor="center">
-          <Pin label="Robot" className="h-11 w-11 bg-postit">
-            <Bot aria-hidden strokeWidth={2.5} className="h-6 w-6" />
-          </Pin>
-        </Marker>
-      )}
-    </Map>
+    </div>
   );
 }
