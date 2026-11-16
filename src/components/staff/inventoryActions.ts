@@ -5,6 +5,7 @@ import type { NoticeValue } from "./Notice";
 import { toChangesBody, toCreateBody, type ProductFormValues } from "./productInput";
 import {
   createProduct,
+  reactivateProduct,
   retireProduct,
   saveQuantity,
   updateProduct,
@@ -48,7 +49,7 @@ export async function saveStock(
   item: InventoryItem,
   quantity: number,
 ): Promise<{ item: InventoryItem | null; notice: NoticeValue }> {
-  const result = await saveQuantity(item.productId, quantity);
+  const result = await saveQuantity(item.productId, quantity, item.stockQuantity);
   if (!result.ok) return { item: null, notice: failed(item, result.message) };
   const { changed, oldQuantity, newQuantity } = result.data;
   return {
@@ -67,6 +68,13 @@ export async function retire(item: InventoryItem): Promise<{ retired: boolean; n
   const result = await retireProduct(item.productId);
   if (!result.ok) return { retired: false, notice: failed(item, result.message) };
   return { retired: true, notice: { kind: "success", text: `${item.name} was retired.` } };
+}
+
+/** Puts a retired product back in the shop. */
+export async function reactivate(item: InventoryItem): Promise<{ reactivated: boolean; notice: NoticeValue }> {
+  const result = await reactivateProduct(item.productId);
+  if (!result.ok) return { reactivated: false, notice: failed(item, result.message) };
+  return { reactivated: true, notice: { kind: "success", text: `${item.name} is back in the shop.` } };
 }
 
 export type ProductSubmitResult =

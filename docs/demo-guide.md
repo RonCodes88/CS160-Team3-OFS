@@ -70,4 +70,4 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 
 The live suite only runs against a local database. It refuses any other address.
 
-Use a dedicated local test database for rehearsal. Never demonstrate a real charge. See [the readiness audit](readiness-audit.md) for gaps and [the black-box checklist](black-box-checklist.md) for acceptance checks.
+Use a dedicated local test database for rehearsal. Never demonstrate a real charge. See [the black-box checklist](black-box-checklist.md) for acceptance checks.

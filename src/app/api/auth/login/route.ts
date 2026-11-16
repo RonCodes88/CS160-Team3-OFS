@@ -2,7 +2,7 @@ import { errorResponse, internalErrorResponse } from "@/lib/api/errors";
 import { authenticate } from "@/lib/auth/accounts";
 import { rateLimitedResponse, readJsonBody, signedInResponse } from "@/lib/auth/http";
 import { clientIp, loginAttemptKey } from "@/lib/auth/rateLimit";
-import { authRateLimit, refundAuthRateLimit } from "@/lib/auth/sharedRateLimit";
+import { authRateLimit, ipScope, refundAuthRateLimit } from "@/lib/auth/sharedRateLimit";
 import { createSession } from "@/lib/auth/session";
 import { parseLogin } from "@/lib/auth/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   try {
     const db = createAdminClient();
     const ip = clientIp(request);
-    const ipLimit = await authRateLimit(db, "login-ip", ip);
+    const ipLimit = await authRateLimit(db, ipScope("login", ip), ip);
     if (!ipLimit.ok) return rateLimitedResponse(ipLimit.retryAfterSeconds);
 
     const json = await readJsonBody(request);
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // Only failures count: a successful login gives its attempts back.
     await Promise.all([
       refundAuthRateLimit(db, "login-pair", attemptKey),
-      refundAuthRateLimit(db, "login-ip", ip),
+      refundAuthRateLimit(db, ipScope("login", ip), ip),
       refundAuthRateLimit(db, "login-account", input.value.email),
     ]);
     return signedInResponse(user, await createSession(db, user.id), 200);

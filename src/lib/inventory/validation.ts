@@ -13,11 +13,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
 
-export type InventoryQuery = { search: string; limit: number; offset: number };
+export type InventoryQuery = { search: string; limit: number; offset: number; retired?: boolean };
 export type LowStockQuery = { threshold: number; limit: number; offset: number };
 
 export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
+}
+
+/**
+ * Parses the optional `expectedQuantity` of a stock change: the quantity the
+ * person was looking at. Absent or null means "set it regardless".
+ */
+export function parseExpectedQuantity(body: unknown): Parsed<number | null> {
+  const expected = (body as Record<string, unknown> | null)?.expectedQuantity;
+  if (expected === undefined || expected === null) return { ok: true, value: null };
+  if (typeof expected !== "number" || !Number.isInteger(expected) || expected < 0 || expected > PG_INT_MAX) {
+    return { ok: false, message: "expectedQuantity must be a whole number." };
+  }
+  return { ok: true, value: expected };
 }
 
 /** Parses `{ "quantity": <whole number >= 0> }`. Strings like "5" are rejected. */
@@ -70,9 +83,13 @@ export function parseInventoryQuery(params: URLSearchParams): Parsed<InventoryQu
   if (search.length > MAX_SEARCH_LENGTH) {
     return { ok: false, message: `q must be at most ${MAX_SEARCH_LENGTH} characters.` };
   }
+  const status = params.get("status");
+  if (status !== null && status !== "active" && status !== "retired") {
+    return { ok: false, message: "status must be active or retired." };
+  }
   const page = parsePage(params);
   if (!page.ok) return page;
-  return { ok: true, value: { search, ...page.value } };
+  return { ok: true, value: { search, ...page.value, ...(status === "retired" ? { retired: true } : {}) } };
 }
 
 /** `?threshold=&limit=&offset=` for GET /api/staff/inventory/low-stock. */

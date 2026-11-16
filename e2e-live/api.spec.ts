@@ -77,6 +77,16 @@ test.describe("access control", () => {
     expect(duplicate.status()).toBe(409);
   });
 
+  test("forty sign-ups in a row from one network are all accepted", async () => {
+    // Without a trusted proxy everyone shares one budget; it must fit a classroom.
+    const guest = await newClient();
+    const statuses = await Promise.all(Array.from({ length: 40 }, (_, index) =>
+      guest.post("/api/auth/register", {
+        data: { email: `e2e-room-${Date.now()}-${index}@ofs.test`, password: "long-enough-pw" },
+      }).then((response) => response.status())));
+    expect(statuses.filter((status) => status !== 201)).toEqual([]);
+  });
+
   test("logout ends the session for later requests", async () => {
     const { client } = await registerCustomer();
     expect((await client.get("/api/cart")).status()).toBe(200);
@@ -188,6 +198,55 @@ test.describe("staff inventory and manager products", () => {
     const { client } = await registerCustomer();
     expect((await setCart(client, product.id, 3)).status()).toBe(409);
     expect((await setCart(client, product.id, 2)).status()).toBe(200);
+  });
+
+  test("a stale stock edit from a second tab is refused instead of overwriting newer stock", async () => {
+    const product = await createProduct(manager, {
+      name: "E2E Counted", priceCents: 100, unitWeight: 10, stockQuantity: 25,
+    });
+    created.push(product);
+    const url = `/api/staff/inventory/${product.id}`;
+
+    // Both tabs loaded the page when the stock was 25. Tab A saves first.
+    expect((await employee.put(url, { data: { quantity: 30, expectedQuantity: 25 } })).status()).toBe(200);
+    // Tab B still believes 25.
+    const stale = await manager.put(url, { data: { quantity: 20, expectedQuantity: 25 } });
+    expect(stale.status()).toBe(409);
+    expect((await stale.json()).currentQuantity).toBe(30);
+
+    const inventory = JSON.stringify(await (await manager.get(`/api/staff/inventory?q=${product.sku}`)).json());
+    expect(inventory).toContain('"stockQuantity":30');
+    // After reloading, tab B's save goes through.
+    expect((await manager.put(url, { data: { quantity: 20, expectedQuantity: 30 } })).status()).toBe(200);
+  });
+
+  test("a manager can reactivate a retired product; an employee cannot", async () => {
+    const product = await createProduct(manager, {
+      name: "E2E Comeback", priceCents: 150, unitWeight: 20, stockQuantity: 4,
+    });
+    created.push(product);
+    const guest = await newClient();
+    expect((await manager.delete(`/api/admin/products/${product.id}`)).status()).toBe(200);
+    expect((await guest.get(`/api/products/${product.id}`)).status()).toBe(404);
+
+    // Retired products are listed for staff, and only there.
+    const retired = JSON.stringify(await (await manager.get(`/api/staff/inventory?status=retired&q=${product.sku}`)).json());
+    expect(retired).toContain(product.id);
+    const active = JSON.stringify(await (await manager.get(`/api/staff/inventory?q=${product.sku}`)).json());
+    expect(active).not.toContain(product.id);
+
+    const reactivate = `/api/admin/products/${product.id}/reactivate`;
+    expect((await employee.post(reactivate)).status()).toBe(403);
+    expect((await guest.post(reactivate)).status()).toBe(401);
+    const response = await manager.post(reactivate);
+    expect(response.status()).toBe(200);
+    expect((await response.json()).changed).toBe(true);
+    expect((await (await manager.post(reactivate)).json()).changed).toBe(false);
+
+    expect((await guest.get(`/api/products/${product.id}`)).status()).toBe(200);
+    const audit = JSON.stringify(await (await manager.get(`/api/admin/audit-log?productId=${product.id}`)).json());
+    expect(audit).toContain("PRODUCT_REACTIVATE");
+    expect((await manager.get("/api/staff/inventory?status=bogus")).status()).toBe(400);
   });
 
   test("bad stock values are rejected with 400", async () => {

@@ -84,11 +84,11 @@ describe("request helpers", () => {
     expect(lastCall()[0]).toBe("/api/admin/audit-log?action=PRODUCT_RETIRE&limit=25&offset=50");
   });
 
-  it("sends only the quantity when saving stock", async () => {
-    await saveQuantity("p1", 12);
+  it("sends the new quantity and the quantity on screen when saving stock", async () => {
+    await saveQuantity("p1", 12, 9);
     const [url, init] = lastCall();
     expect(url).toBe("/api/staff/inventory/p1");
-    expect(init).toMatchObject({ method: "PUT", body: '{"quantity":12}', headers: { "content-type": "application/json" } });
+    expect(init).toMatchObject({ method: "PUT", body: '{"quantity":12,"expectedQuantity":9}', headers: { "content-type": "application/json" } });
   });
 
   it("uses POST, PUT, and DELETE for the product endpoints", async () => {

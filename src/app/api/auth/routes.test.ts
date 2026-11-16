@@ -26,8 +26,11 @@ vi.mock("@/lib/auth/sharedRateLimit", async () => {
     "login-ip": createRateLimiter({ limit: 30, windowMs: 900000 }),
     "login-pair": createRateLimiter({ limit: 10, windowMs: 900000 }),
     "login-account": createRateLimiter({ limit: 100, windowMs: 900000 }),
+    "register-shared": createRateLimiter({ limit: 300, windowMs: 900000 }),
+    "login-shared": createRateLimiter({ limit: 600, windowMs: 900000 }),
   };
   return {
+    ipScope: (kind: "register" | "login", ip: string) => (ip === "unknown" ? `${kind}-shared` : `${kind}-ip`),
     authRateLimit: async (_db: unknown, scope: keyof typeof scopes, key: string) => scopes[scope].hit(key),
     refundAuthRateLimit: async (_db: unknown, scope: keyof typeof scopes, key: string) => scopes[scope].refund(key),
   };

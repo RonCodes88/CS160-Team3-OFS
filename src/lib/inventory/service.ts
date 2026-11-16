@@ -30,7 +30,9 @@ export type QuantityChange = {
 
 export type SetQuantityResult =
   | { ok: true; value: QuantityChange }
-  | { ok: false; reason: "NOT_FOUND" | "INVALID_QUANTITY" | "FORBIDDEN" };
+  | { ok: false; reason: "NOT_FOUND" | "INVALID_QUANTITY" | "FORBIDDEN" }
+  /** The stock is no longer what the caller was looking at. */
+  | { ok: false; reason: "STALE"; currentQuantity: number | null };
 
 type ProductRow = {
   id: string;
@@ -88,12 +90,12 @@ export function buildSearchFilter(search: string): string | null {
   return `name.ilike."*${term}*",sku.ilike."*${term}*"`;
 }
 
-/** Active products with their stock, sorted by name. */
+/** Active products with their stock, sorted by name; `retired` lists retired ones instead. */
 export async function listInventory(
   db: SupabaseClient,
-  { search, limit, offset }: InventoryQuery,
+  { search, limit, offset, retired = false }: InventoryQuery,
 ): Promise<InventoryPage> {
-  let query = db.from("products").select(INVENTORY_COLUMNS).eq("is_active", true);
+  let query = db.from("products").select(INVENTORY_COLUMNS).eq("is_active", !retired);
   const filter = buildSearchFilter(search);
   if (filter) query = query.or(filter);
 
@@ -132,11 +134,14 @@ export async function setInventoryQuantity(
   actorUserId: string,
   productId: string,
   quantity: number,
+  /** When given, the change is refused unless the stock still equals this. */
+  expectedQuantity: number | null = null,
 ): Promise<SetQuantityResult> {
   const { data, error } = await db.rpc("staff_set_inventory_quantity", {
     p_actor_user_id: actorUserId,
     p_product_id: productId,
     p_quantity: quantity,
+    p_expected_quantity: expectedQuantity,
   });
 
   if (error) {
@@ -147,6 +152,10 @@ export async function setInventoryQuantity(
         return { ok: false, reason: "INVALID_QUANTITY" };
       case "42501":
         return { ok: false, reason: "FORBIDDEN" };
+      case "P0021": {
+        const current = Number(error.details);
+        return { ok: false, reason: "STALE", currentQuantity: Number.isInteger(current) ? current : null };
+      }
       default:
         throw new Error(`staff_set_inventory_quantity failed: ${error.message}`);
     }

@@ -7,6 +7,7 @@ function fixture(status = "requires_payment_method", attempts = [{ id: "attempt"
     retrieve: vi.fn(async () => ({ status })),
     cancel: vi.fn(async () => {}),
     finalize: vi.fn(async () => ({ status: "VOIDED" })),
+    link: vi.fn(async () => "pi_linked"),
   };
   return { deps, run: () => cancelPendingPayments("customer", deps) };
 }
@@ -36,9 +37,26 @@ describe("cancelPendingPayments", () => {
     expect(f.deps.finalize).not.toHaveBeenCalled();
   });
 
-  it("asks for reconciliation when no Stripe payment was linked", async () => {
+  it("links an attempt that never got a Stripe payment, then cancels it so the cart is freed", async () => {
     const f = fixture("requires_payment_method", [{ id: "attempt", provider_payment_id: null }]);
-    await expect(f.run()).rejects.toMatchObject({ code: "PAYMENT_RECONCILIATION_REQUIRED" });
+    expect(await f.run()).toEqual({ canceled: 1 });
+    expect(f.deps.link).toHaveBeenCalledWith({ id: "attempt", provider_payment_id: null });
+    expect(f.deps.retrieve).toHaveBeenCalledWith("pi_linked");
+    expect(f.deps.cancel).toHaveBeenCalledWith({ id: "attempt", provider_payment_id: "pi_linked" });
+  });
+
+  it("does not link attempts that already have a Stripe payment", async () => {
+    const f = fixture();
+    await f.run();
+    expect(f.deps.link).not.toHaveBeenCalled();
+  });
+
+  it("leaves the attempt alone when the provider link fails", async () => {
+    const f = fixture("requires_payment_method", [{ id: "attempt", provider_payment_id: null }]);
+    vi.mocked(f.deps.link).mockRejectedValue(new Error("stripe down"));
+    await expect(f.run()).rejects.toThrow("stripe down");
+    expect(f.deps.cancel).not.toHaveBeenCalled();
+    expect(f.deps.finalize).not.toHaveBeenCalled();
   });
 
   it("fails when finalization did not record the void", async () => {

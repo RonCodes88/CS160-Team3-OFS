@@ -9,6 +9,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   PRODUCT_CREATE: "Product created",
   PRODUCT_UPDATE: "Product edited",
   PRODUCT_RETIRE: "Product retired",
+  PRODUCT_REACTIVATE: "Product reactivated",
 };
 
 const FIELD_LABELS: Record<string, string> = {
