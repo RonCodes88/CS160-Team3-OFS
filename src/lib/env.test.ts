@@ -106,7 +106,7 @@ describe(".env.example", () => {
     for (const v of ENV_VARS) expect(defined.has(v.name), `${v.name} missing from .env.example`).toBe(true);
     // Placeholders end in xxx or are obviously fake, never real-looking keys.
     // The service area is public configuration, so its real values are listed.
-    const publicSettings = new Set(["OFS_STORE_LATITUDE", "OFS_STORE_LONGITUDE", "OFS_DELIVERY_RADIUS_METERS", "OFS_DELIVERY_WAIT_MINUTES", "OFS_EMAIL_PROVIDER", "OFS_TRUST_PROXY_HEADERS", "OFS_ROBOT_BASE_URL", "OFS_ROBOT_POLL_MS", "OFS_ROBOT_STEP_MS"]);
+    const publicSettings = new Set(["OFS_STORE_LATITUDE", "OFS_STORE_LONGITUDE", "OFS_DELIVERY_RADIUS_METERS", "OFS_DELIVERY_WAIT_MINUTES", "OFS_EMAIL_PROVIDER", "OFS_TRUST_PROXY_HEADERS", "OFS_ROBOT_BASE_URL", "OFS_ROBOT_POLL_MS", "OFS_ROBOT_STEP_MS", "OFS_IN_APP_WORKERS", "OFS_IN_APP_ROBOT"]);
     expect(defined.get("OFS_DELIVERY_WAIT_MINUTES")).toBe("20");
     for (const [name, value] of defined) {
       if (!publicSettings.has(name) && value !== "") expect(value, name).toMatch(/xxx|your-project-ref/);

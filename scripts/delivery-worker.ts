@@ -1,15 +1,13 @@
 import { createAdminClient } from "../src/lib/supabase/admin";
-import { getPendingDeliveryOrders } from "../src/lib/orders/queue";
-import { routeTripById } from "../src/lib/routing/service";
-import { runDeliveryTick } from "../src/lib/delivery/job";
 import { waitLimitMinutes } from "../src/lib/delivery/dispatch";
-import { departWithFreshRoute } from "../src/lib/delivery/departure";
+import { createDeliveryTick } from "../src/lib/delivery/worker";
 
 try { process.loadEnvFile(".env.local"); } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
 const minutes = waitLimitMinutes(process.env.OFS_DELIVERY_WAIT_MINUTES);
 const db = createAdminClient();
+const tick = createDeliveryTick(db, minutes);
 let stopping = false;
 let wake: (() => void) | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { stopping = true; wake?.(); });
@@ -19,27 +17,7 @@ async function main() {
   do {
     const started = Date.now();
     try {
-      await runDeliveryTick({
-        readQueue: () => getPendingDeliveryOrders(db),
-        createTrip: async (ids, wait) => {
-          const { data, error } = await db.rpc("delivery_create_trip", { p_order_ids: ids, p_wait_minutes: wait });
-          if (error) throw error;
-          return data as string | null;
-        },
-        pendingTrips: async () => {
-          const { data, error } = await db.from("trips").select("id").eq("status", "PLANNED").order("created_at");
-          if (error) throw error;
-          return data.map(trip => trip.id);
-        },
-        route: id => routeTripById(db, id),
-        routedTrips: async () => {
-          const { data, error } = await db.from("trips").select("id").eq("status", "ROUTED").order("created_at");
-          if (error) throw error;
-          return data.map(trip => trip.id);
-        },
-        depart: id => departWithFreshRoute(db, id),
-        report: error => console.error("Delivery operation failed:", error),
-      }, new Date(), minutes);
+      await tick(new Date());
     } catch (error) { console.error("Delivery tick failed:", error); }
     if (stopping || process.argv.includes("--once")) break;
     // Await each tick: a slow routing request must not overlap the next tick.

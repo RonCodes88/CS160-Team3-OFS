@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
-import { getCustomerTracking } from "./tracking";
+import { getCustomerTracking, routeToDestination } from "./tracking";
 
 const CUSTOMER = "11111111-1111-4111-8111-111111111111";
 const ORDER = "22222222-2222-4222-8222-222222222222";
@@ -163,6 +163,7 @@ describe("customer tracking service", () => {
           customer_id: CUSTOMER,
           status: "BATCHED",
           trip_id: TRIP,
+          location: point(-121.88, 37.34),
         },
         error: null,
       },
@@ -184,7 +185,7 @@ describe("customer tracking service", () => {
         estimatedArrival: null,
         route,
         robotLocation: null,
-        destination: null,
+        destination: { latitude: 37.34, longitude: -121.88 },
       },
     });
     expect(from).toHaveBeenCalledTimes(3);
@@ -284,5 +285,40 @@ describe("customer tracking service", () => {
 
     await expect(getCustomerTracking(db, CUSTOMER, ORDER))
       .rejects.toThrow("simulated failure");
+  });
+});
+
+describe("routeToDestination", () => {
+  const home = { latitude: 37.33, longitude: -121.86 };
+  // Store, this customer's home, then another customer's home.
+  const trip = { type: "LineString", coordinates: [[-121.88, 37.33], [-121.87, 37.33], [-121.86, 37.33], [-121.85, 37.33], [-121.84, 37.33]] };
+
+  it("ends the line at this customer's stop, hiding later customers' homes", () => {
+    expect(routeToDestination(trip, home)).toEqual({
+      type: "LineString",
+      coordinates: [[-121.88, 37.33], [-121.87, 37.33], [-121.86, 37.33]],
+    });
+  });
+
+  it("keeps the whole line for the last stop", () => {
+    expect(routeToDestination(trip, { latitude: 37.33, longitude: -121.84 })?.coordinates).toHaveLength(5);
+  });
+
+  it("always keeps at least two points so the map can draw a line", () => {
+    expect(routeToDestination(trip, { latitude: 37.33, longitude: -121.88 })?.coordinates).toEqual([[-121.88, 37.33], [-121.87, 37.33]]);
+  });
+
+  it.each([
+    ["no route", null],
+    ["a point", { type: "Point", coordinates: [-121.88, 37.33] }],
+    ["one coordinate", { type: "LineString", coordinates: [[-121.88, 37.33]] }],
+    ["text coordinates", { type: "LineString", coordinates: [["a", "b"], [-121.87, 37.33]] }],
+    ["a string", "LINESTRING(0 0, 1 1)"],
+  ])("returns null for %s", (_, route) => {
+    expect(routeToDestination(route, home)).toBeNull();
+  });
+
+  it("returns null when the order has no saved destination", () => {
+    expect(routeToDestination(trip, null)).toBeNull();
   });
 });
