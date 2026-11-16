@@ -15,6 +15,7 @@ const child = spawn("npx", ["next", "dev", "--port", PORT], {
     NEXT_PUBLIC_SUPABASE_URL: supabase.url,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabase.publishableKey,
     SUPABASE_SECRET_KEY: supabase.secretKey,
+    OFS_NEXT_DIST_DIR: ".next-e2e",
     OFS_STORE_LATITUDE: "37.3352",
     OFS_STORE_LONGITUDE: "-121.8811",
     OFS_DELIVERY_RADIUS_METERS: "5000",

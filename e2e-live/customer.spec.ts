@@ -117,6 +117,36 @@ test("the 200 lb limit rejects the change in the browser and keeps the cart", as
   await expect(summary(page)).toContainText("200.00 lb");
 });
 
+test("mobile cart displays exact fee boundaries and preserves the maximum after reload", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await register(page);
+  expect((await setCart(page.request, brick.id, 1)).status()).toBe(200);
+
+  for (const [quantity, weight, fee] of [
+    [200, "19.99 lb", false],
+    [201, "20.00 lb", true],
+  ] as const) {
+    expect((await setCart(page.request, feather.id, quantity)).status()).toBe(200);
+    await page.goto("/cart");
+    await expect(summary(page)).toContainText(weight);
+    const delivery = summary(page).getByRole("term").filter({ hasText: /^Delivery$/ }).locator("+ dd");
+    await expect(delivery).toHaveText(fee ? "$10.00" : "Free");
+  }
+
+  expect((await setCart(page.request, brick.id, 11)).status()).toBe(200);
+  expect((await setCart(page.request, feather.id, 210)).status()).toBe(200);
+  await page.reload();
+  await expect(summary(page)).toContainText("199.99 lb");
+  const plus = page.getByRole("button", { name: `Add one ${feather.name}`, exact: true });
+  await plus.click();
+  await expect(summary(page)).toContainText("200.00 lb");
+  await plus.click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("200 lb");
+  await page.reload();
+  await expect(summary(page)).toContainText("200.00 lb");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("two tabs share one cart, survive rapid clicks, and recover when the other tab logs out", async ({ context, page }) => {
   await register(page);
   expect((await setCart(page.request, feather.id, 1)).status()).toBe(200);

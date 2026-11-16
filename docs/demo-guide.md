@@ -56,7 +56,7 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 4. Show the confirmation totals and order snapshot.
 5. Sign in as an employee. Search inventory and update a quantity.
 6. Sign in as a manager. Edit a product, inspect the audit log, and explain retirement.
-7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. Tracking stays with Noah's separate work.
+7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. The tracking API is implemented; the live map page remains a placeholder.
 
 ## Explain the testing in 30 seconds
 
@@ -71,3 +71,5 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 The live suite only runs against a local database. It refuses any other address.
 
 Use a dedicated local test database for rehearsal. Never demonstrate a real charge. See [the black-box checklist](black-box-checklist.md) for acceptance checks.
+
+See [architecture and code ownership](architecture.md), [API flows](api-flows.md), and [demo rehearsal and coverage limits](testing.md) for more detail.
