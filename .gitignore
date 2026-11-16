@@ -44,5 +44,7 @@ next-env.d.ts
 !.env.example
 
 # Browser test artifacts
+/.next-e2e/
+/.next-browser/
 /playwright-report/
 /test-results/

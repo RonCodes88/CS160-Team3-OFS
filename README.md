@@ -6,8 +6,9 @@ Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so 
 
 - [Presentation notes and core code logic](docs/demo-guide.md)
 - [Black-box acceptance checklist](docs/black-box-checklist.md)
+- [Demo rehearsal, test commands, and coverage limits](docs/testing.md)
 
-The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. Tracking remains in Noah's separate work.
+The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. The customer tracking API is implemented; the live tracking map UI remains a placeholder.
 
 See [worker deployment and recovery commands](docs/run-workers.md) and [implementation decisions](docs/implementation-decisions.md).
 
@@ -69,15 +70,73 @@ git push -u origin my-feature
 
 Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Docker build) runs on every PR and must pass before you can merge.
 
-## Where things are
+## Architecture
 
-| Path                         | What                                                    |
-| ---------------------------- | ------------------------------------------------------- |
-| `src/app/`                   | Pages and layouts                                       |
-| `src/lib/supabase/client.ts` | Supabase client for Client Components (`"use client"`)  |
-| `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
-| `src/proxy.ts`               | Supabase cookie refresh; OFS API access uses custom hashed sessions in `src/lib/auth` |
-| `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
+```mermaid
+flowchart TD
+    Customer[Customer browser] --> Web[Next.js pages and React components]
+    Staff[Employee and manager browser] --> Web
+    Web --> API[Next.js API route handlers]
+    API --> Auth[Hashed sessions and role checks]
+    Auth --> Services[TypeScript service modules in src/lib]
+    Services --> DB[(Supabase PostgreSQL and PostGIS)]
+    Services --> Stripe[Stripe test payments]
+    Services --> Mapbox[Mapbox geocoding and road routing]
+    Stripe --> Webhook[Signed Stripe webhook]
+    Webhook --> Finalize[Shared payment finalization]
+    Services --> Finalize
+    Finalize --> DB
+    Delivery[Delivery worker] --> DB
+    Delivery --> Mapbox
+    Recovery[Payment recovery worker] --> Finalize
+    Robot[Simulated robot HTTP client] --> API
+```
+
+This is one Next.js application with service modules, plus separate delivery and payment-recovery processes. It is not a collection of independently deployed microservices. Routes check access and validate input. Services implement pricing, checkout, payment recovery, batching, and routing. PostgreSQL transactions enforce concurrent updates and preserve order snapshots. The current schema stores stock in `products.stock_quantity`.
+
+Money uses integer cents and weight uses integer hundredths of a pound. The server recalculates prices and totals. Stripe collects card details. OFS stores provider identifiers and payment state.
+
+Read [architecture and code ownership](docs/architecture.md), [API flows](docs/api-flows.md), and [demo rehearsal and test limits](docs/testing.md) before presenting. The [presentation guide](docs/demo-guide.md) gives a short spoken walkthrough.
+
+## Codebase structure
+
+```text
+src/
+  app/                 Next.js pages, layouts, and API handlers
+    api/               auth, products, cart, checkout, staff, admin, vehicle, orders
+    shop/              Catalog and product detail pages
+    cart/              Cart page
+    checkout/          Checkout page
+    orders/            Private order confirmation
+    staff/             Employee and manager dashboard
+  components/          React UI grouped by cart, checkout, shop, staff, layout, ui
+  lib/                 Server services, validation, provider adapters, pure rules
+    auth/              Accounts, hashed sessions, roles, addresses, service area
+    cart/              Pricing and cart mutations
+    checkout/          Preview validation and demo tax
+    payments/          Stripe, idempotency, finalization, refunds, recovery
+    orders/            Order reads, queue, customer tracking data
+    delivery/          Batching, dispatch, vehicle assignment and departure
+    routing/           Stop ordering, Mapbox routes, route persistence
+    vehicle/           Vehicle location, stop transitions, simulator logic
+    notifications/     Notification messages, delivery, and retry state
+    catalog/           Catalog queries and sample data
+    inventory/         Inventory input validation
+    products/          Product validation
+    audit/             Staff change audit records
+    supabase/          Browser, server, and privileged database clients
+    api/               Shared API errors
+    db/                Database health checks
+scripts/               Delivery worker, recovery worker, robot simulator
+supabase/migrations/   Versioned schema and transactional database functions
+supabase/tests/        SQL rollback, inventory, and concurrency checks
+supabase/seed.sql       Local demo accounts and catalog
+e2e/                   Browser failure regressions with fixed provider responses
+e2e-live/              Real app, real local database, API and browser journeys
+docs/                  Architecture, API flows, testing, and presentation guides
+```
+
+Tests also live beside the code as `*.test.ts`, `*.test.tsx`, and `*.db.test.ts`. `src/proxy.ts` handles Supabase cookie refresh. OFS API authorization uses the custom sessions in `src/lib/auth`.
 
 ## Database
 
