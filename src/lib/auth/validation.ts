@@ -5,6 +5,8 @@ export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 128;
 const MAX_EMAIL_LENGTH = 254;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Postgres text can't store NUL, and no real address has control characters.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
 export type Credentials = { email: string; password: string };
 
@@ -27,7 +29,7 @@ export function parseRegistration(body: unknown): Parsed {
     return { ok: false, message: "Email and password are required." };
   }
   const normalized = normalizeEmail(email);
-  if (normalized.length > MAX_EMAIL_LENGTH || !EMAIL.test(normalized)) {
+  if (normalized.length > MAX_EMAIL_LENGTH || !EMAIL.test(normalized) || CONTROL_CHARS.test(normalized)) {
     return { ok: false, message: "Enter a valid email address." };
   }
   if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
@@ -46,7 +48,7 @@ export function parseLogin(body: unknown): Parsed {
     return { ok: false, message: "Email and password are required." };
   }
   // Longer passwords can't exist, and hashing them would waste work.
-  if (password.length > MAX_PASSWORD_LENGTH || email.length > MAX_EMAIL_LENGTH) {
+  if (password.length > MAX_PASSWORD_LENGTH || email.length > MAX_EMAIL_LENGTH || CONTROL_CHARS.test(email.trim())) {
     return { ok: false, message: "Email or password is incorrect." };
   }
   return { ok: true, value: { email: normalizeEmail(email), password } };

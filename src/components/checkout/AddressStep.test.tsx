@@ -26,6 +26,8 @@ describe("AddressStep", () => {
   it("disables confirming with nothing selected or while busy", () => {
     expect(render({ selectedId: null })).toMatch(/disabled=""[^>]*>Deliver here/);
     expect(render({ busy: true })).toContain("Checking…");
+    expect(render({ busy: true }).match(/type="radio"[^>]*disabled=""/g)).toHaveLength(2);
+    expect(render({ busy: true })).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Add a new address/);
   });
 
   it("opens the new-address form when there are no saved addresses", () => {

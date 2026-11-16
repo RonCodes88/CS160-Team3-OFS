@@ -221,6 +221,9 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
     it("updates orders and completes the trip after the final delivery", async () => {
       const firstArrival = await updateDeliveryStopStatus(db, vehicleA, stop1, "ARRIVED");
       expect(firstArrival.ok).toBe(true);
+      const arrived = await getRow("delivery_stops", stop1, "arrived_at");
+      expect(await updateDeliveryStopStatus(db, vehicleA, stop1, "ARRIVED")).toEqual(firstArrival);
+      expect(await getRow("delivery_stops", stop1, "arrived_at")).toEqual(arrived);
 
       const firstDelivery = await updateDeliveryStopStatus(db, vehicleA, stop1, "DELIVERED");
       expect(firstDelivery).toEqual({
@@ -228,6 +231,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
         stop: { id: stop1, status: "DELIVERED" },
         tripCompleted: false,
       });
+      expect(await updateDeliveryStopStatus(db, vehicleA, stop1, "DELIVERED")).toEqual(firstDelivery);
 
       const firstOrder = await getRow("orders", order1, "status");
       const firstStop = await getRow("delivery_stops", stop1, "arrived_at, completed_at");
@@ -247,6 +251,10 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
         stop: { id: stop2, status: "DELIVERED" },
         tripCompleted: true,
       });
+      // A lost final response must be safe to retry after the vehicle is released.
+      expect(await updateDeliveryStopStatus(db, vehicleA, stop2, "DELIVERED")).toEqual(finalDelivery);
+      expect(await updateDeliveryStopStatus(db, vehicleB, stop2, "DELIVERED"))
+        .toEqual({ ok: false, reason: "NOT_FOUND" });
 
       const secondOrder = await getRow("orders", order2, "status");
       const trip = await getRow("trips", tripA, "status, completed_at");

@@ -85,6 +85,10 @@ export function CheckoutView({ initialAddresses, publishableKey }: {
     if (confirmedId) {
       const result = await fetchPreview(confirmedId);
       if (result.ok) setPreview(result.preview);
+      else {
+        setPreview(null);
+        setConfirmedId(null);
+      }
     }
   }, [confirmedId, loadCart]);
 
@@ -179,8 +183,13 @@ export function CheckoutView({ initialAddresses, publishableKey }: {
       }
       setBusy(true);
       setSelectedId(stored.addressId);
-      if (await review(stored.addressId)) await begin(stored);
-      setBusy(false);
+      try {
+        if (await review(stored.addressId)) await begin(stored);
+      } catch {
+        setError("Network error. Check your connection and try again.");
+      } finally {
+        setBusy(false);
+      }
     })();
   }, [begin, initialAddresses, loadCart, review]);
 

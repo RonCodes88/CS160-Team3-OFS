@@ -16,3 +16,23 @@ services:
       # Keep the container's node_modules and build cache separate from the host's.
       - /app/node_modules
       - /app/.next
+
+  delivery:
+    profiles: [workers]
+    build:
+      context: .
+      target: worker
+    env_file: .env.local
+    init: true
+    restart: unless-stopped
+    command: ["npm", "run", "delivery:worker"]
+
+  recovery:
+    profiles: [workers]
+    build:
+      context: .
+      target: worker
+    env_file: .env.local
+    init: true
+    restart: unless-stopped
+    command: ["npm", "run", "recovery:worker"]

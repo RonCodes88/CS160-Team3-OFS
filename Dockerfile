@@ -15,6 +15,15 @@ COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 
+# ---- worker: supervised delivery and recovery jobs ----
+FROM deps AS worker
+ENV NODE_ENV=production
+COPY --chown=node:node src ./src
+COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node tsconfig.json ./
+USER node
+CMD ["npm", "run", "delivery:worker"]
+
 # ---- builder: production build ----
 FROM deps AS builder
 COPY . .

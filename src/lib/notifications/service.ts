@@ -29,14 +29,14 @@ export async function processPendingNotifications(
       const order = await store.loadOrder(notification.orderId);
       if (!order) throw new Error(`order ${notification.orderId} not found`);
       const { subject, text } = renderMessage(notification.type, notification.payload, order);
-      await sender.send({ to: notification.recipientEmail, subject, text });
-      await store.markSent(notification.id);
+      await sender.send({ to: notification.recipientEmail, subject, text }, notification.id);
+      await store.markSent(notification.id, notification.claimToken);
       result.sent += 1;
     } catch (err) {
       result.failed += 1;
       const message = err instanceof Error ? err.message : String(err);
       try {
-        await store.markFailed(notification.id, message);
+        await store.markFailed(notification.id, message, notification.claimToken);
       } catch (markError) {
         // The lease expires on its own, so the row is retried even if this write fails.
         console.error(markError);

@@ -41,6 +41,9 @@ describe("order confirmation page", () => {
     expect(html).toContain("$0.45");
     expect(html).toContain("$19.43");
     expect(html).toContain("20.20 lb");
+    expect(html).toContain("Your receipt is shown below.");
+    expect(html).toContain("Demo tax (5%)");
+    expect(html).not.toContain("email you a receipt");
   });
 
   it("shows Free delivery and an unknown status as-is", async () => {

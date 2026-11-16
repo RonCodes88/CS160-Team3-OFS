@@ -1,5 +1,5 @@
-// Every environment variable the app reads, with a format check for each.
-// .env.example lists the same variables; keep the two in sync.
+// Required server configuration, with a format check for each.
+// .env.example also documents optional worker and proxy configuration.
 //
 // NEXT_PUBLIC_* values are inlined into the browser bundle at build time, so
 // only publishable keys may use that prefix. Secrets must not.

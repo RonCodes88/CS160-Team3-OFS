@@ -24,6 +24,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:coverage
@@ -37,6 +38,23 @@ jobs:
             nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - run: npm run build
+
+  browser-tests:
+    name: Browser regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Coverage merges unit execution with real component interactions.
+      # Provider responses are fixtures; this job never mutates a database.
+      - run: npm run test:coverage
+      - run: npm run test:e2e
+      - run: node e2e/coverage.mjs --check
 
   # Runs the *.db.test.ts suites against a throwaway local Supabase. They skip
   # without SUPABASE_TEST_URL, so the check job above never exercises them.
@@ -76,6 +94,15 @@ jobs:
       - run: npm run test:db
       - name: Verify database transaction rollback
         run: npx supabase test db
+      - name: Verify cart edits racing checkout
+        run: python3 scripts/test-cart-concurrency.py
+
+      # Real browser and real HTTP calls against the app and this local
+      # database: the customer journey and the API contract, with no mocks.
+      # The Stripe payment test skips itself because CI has no Stripe keys.
+      - run: npx playwright install --with-deps chromium
+      - name: Live end-to-end and API integration tests
+        run: npm run test:e2e:live
 
   # The check job already proves the app builds. The Docker image can only
   # break when these files change, so skip the slow Docker build otherwise.
@@ -112,6 +139,15 @@ jobs:
         with:
           context: .
           target: runner
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build worker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: worker
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

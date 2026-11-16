@@ -9,6 +9,7 @@ declare module "@mapbox/mapbox-sdk/services/directions" {
     geometries?: "geojson" | "polyline" | "polyline6";
     overview?: "simplified" | "full" | "false";
     steps?: boolean;
+    departAt?: string;
   };
 
   export type MapiRequest<T> = {

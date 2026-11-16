@@ -1,24 +1,28 @@
+import { internalErrorResponse } from "@/lib/api/errors";
 import { getCatalogProduct } from "@/lib/catalog/service";
 
 export async function GET(
     _request: Request,
     { params }: { params: Promise<{ productId: string }> },
 ) {
-    const { productId } = await params;
-    const product = await getCatalogProduct(productId);
+    try {
+        const { productId } = await params;
+        const product = await getCatalogProduct(productId);
 
-
-    if (!product) {
-        return Response.json(
-            {
-                error: {
-                    code: "PRODUCT_NOT_FOUND",
-                    message: "Product not found.",
+        if (!product) {
+            return Response.json(
+                {
+                    error: {
+                        code: "PRODUCT_NOT_FOUND",
+                        message: "Product not found.",
+                    },
                 },
-            },
-            { status: 404 },
-        );
-    }
+                { status: 404 },
+            );
+        }
 
-    return Response.json({ product });
+        return Response.json({ product });
+    } catch (err) {
+        return internalErrorResponse(err);
+    }
 }

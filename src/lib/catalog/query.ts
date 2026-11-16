@@ -16,7 +16,8 @@ function first(value: string | string[] | undefined): string | undefined {
 export function parseShopQuery(params: SearchParams): ProductQuery {
   const query: ProductQuery = {};
 
-  const q = first(params.q)?.replace(/\s+/g, " ").trim().slice(0, MAX_SEARCH_LENGTH).trim();
+  // Control characters (a NUL would make Postgres reject the query) become spaces.
+  const q = first(params.q)?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_SEARCH_LENGTH).trim();
   if (q) query.q = q;
 
   const category = first(params.category)?.trim().toLowerCase();

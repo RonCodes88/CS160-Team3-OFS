@@ -12,6 +12,12 @@ const validNew = {
 };
 
 describe("parseNewProduct", () => {
+
+  it.each(["sku", "name", "description", "imageUrl"])("rejects NUL in product %s", (field) => {
+    const value = field === "imageUrl" ? "https://example.com/a\u0000b.png" : "a\u0000b";
+    expect(parseNewProduct({ ...validNew, [field]: value }).ok).toBe(false);
+    expect(parseProductChanges({ [field]: value }).ok).toBe(false);
+  });
   it("maps camelCase input to columns and fills defaults", () => {
     expect(parseNewProduct(validNew)).toEqual({
       ok: true,

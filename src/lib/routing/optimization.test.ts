@@ -37,6 +37,7 @@ describe("optimizeTripRoute", () => {
       origin,
       stops: [destination],
       returnToOrigin: true,
+      departureTime,
     });
 
     expect(result.geometry).toEqual(route.geometry);
@@ -104,6 +105,7 @@ describe("optimizeTripRoute additional cases", () => {
       origin,
       stops: [near, far],
       returnToOrigin: true,
+      departureTime,
     });
 
     expect(result.stops).toEqual([

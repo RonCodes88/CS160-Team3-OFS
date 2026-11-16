@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { routeTripById } from "./service";
+import { STORE_LOCATION } from "@/lib/delivery/store";
 
 // Load local test settings when available. Missing settings will skip these tests.
 try {
@@ -170,7 +171,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
       const routeProvider = vi.fn();
 
       await expect(
-        routeTripById(db, tripId, { routeProvider }),
+        routeTripById(db, tripId, { routeProvider, origin: STORE_LOCATION }),
       ).rejects.toThrow("Only PLANNED trips can be routed.");
 
       expect(routeProvider).not.toHaveBeenCalled();
@@ -197,7 +198,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
       const routeProvider = vi.fn();
 
       await expect(
-        routeTripById(db, tripId, { routeProvider }),
+        routeTripById(db, tripId, { routeProvider, origin: STORE_LOCATION }),
       ).rejects.toThrow(
         "Assigned order count does not match the trip order count.",
       );
@@ -215,7 +216,7 @@ describe.skipIf(!TEST_URL || !TEST_KEY)(
       );
 
       await expect(
-        routeTripById(db, tripId, { routeProvider }),
+        routeTripById(db, tripId, { routeProvider, origin: STORE_LOCATION }),
       ).rejects.toThrow("Mapbox unavailable");
 
       expect(routeProvider).toHaveBeenCalledTimes(1);
