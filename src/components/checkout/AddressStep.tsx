@@ -59,6 +59,7 @@ export function AddressStep({ addresses, selectedId, confirmedId, locked, busy, 
             <label key={address.id}
               className="flex cursor-pointer items-start gap-3 rounded-wobbly border-2 border-pencil bg-white p-4 text-lg has-[:checked]:bg-postit has-[:checked]:shadow-hard-sm">
               <input type="radio" name="address" value={address.id} checked={selectedId === address.id}
+                disabled={busy}
                 onChange={() => onSelect(address.id)} className="mt-1.5 h-5 w-5 accent-pen" />
               <span>
                 {address.label && <span className="block font-heading">{address.label}</span>}
@@ -79,7 +80,7 @@ export function AddressStep({ addresses, selectedId, confirmedId, locked, busy, 
           }}
         />
       ) : (
-        <button type="button" onClick={() => setAdding(true)}
+        <button type="button" disabled={busy} onClick={() => setAdding(true)}
           className="mt-4 inline-flex items-center gap-2 text-lg underline decoration-marker">
           <Plus aria-hidden strokeWidth={2.5} className="h-5 w-5" /> Add a new address
         </button>

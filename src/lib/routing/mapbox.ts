@@ -18,6 +18,8 @@ export type RouteRequest = {
   origin?: LatLng;
   /** Add a final leg back to the origin. Defaults to true: the robot returns to the store. */
   returnToOrigin?: boolean;
+  /** UTC departure used by traffic predictions as well as customer ETAs. */
+  departureTime?: Date;
 };
 
 export type RouteLeg = {
@@ -60,8 +62,8 @@ export class RoutingError extends Error {
 export type RoutingOptions = {
   /** Defaults to MAPBOX_ACCESS_TOKEN. */
   accessToken?: string;
-  /** Defaults to "driving". */
-  profile?: "driving" | "walking" | "cycling";
+  /** Traffic conditions and timed restrictions apply by default. */
+  profile?: "driving-traffic" | "driving" | "walking" | "cycling";
   timeoutMs?: number;
   /** For tests: a stand-in for the SDK's Directions service. */
   directions?: DirectionsService;
@@ -136,6 +138,11 @@ function toRoutingError(err: unknown): RoutingError {
 /** Fetches the route through a trip's stops in order. Throws RoutingError on any failure. */
 export async function fetchTripRoute(request: RouteRequest, options: RoutingOptions = {}): Promise<Route> {
   const points = waypointsFor(request);
+  const departureTime = request.departureTime ?? new Date();
+  if (!Number.isFinite(departureTime.getTime())) {
+    throw new RoutingError("INVALID_REQUEST", "Invalid departure time.");
+  }
+  const profile = options.profile ?? "driving-traffic";
 
   let directions = options.directions;
   if (!directions) {
@@ -150,7 +157,9 @@ export async function fetchTripRoute(request: RouteRequest, options: RoutingOpti
   }
 
   const call = directions.getDirections({
-    profile: options.profile ?? "driving",
+    profile,
+    ...(["driving", "driving-traffic"].includes(profile)
+      ? { departAt: departureTime.toISOString().replace(/\.\d{3}Z$/, "Z") } : {}),
     waypoints: points.map(({ lat, lng }) => ({ coordinates: [lng, lat] })),
     geometries: "geojson",
     overview: "full",

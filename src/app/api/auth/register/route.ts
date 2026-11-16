@@ -1,7 +1,8 @@
 import { errorResponse, internalErrorResponse } from "@/lib/api/errors";
 import { registerCustomer } from "@/lib/auth/accounts";
 import { rateLimitedResponse, readJsonBody, signedInResponse } from "@/lib/auth/http";
-import { clientIp, registerLimiter } from "@/lib/auth/rateLimit";
+import { clientIp } from "@/lib/auth/rateLimit";
+import { authRateLimit } from "@/lib/auth/sharedRateLimit";
 import { createSession } from "@/lib/auth/session";
 import { parseRegistration } from "@/lib/auth/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,7 +12,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // only customers self-register. Public, rate-limited per IP.
 export async function POST(request: Request) {
   try {
-    const limit = registerLimiter.hit(clientIp(request));
+    const db = createAdminClient();
+    const limit = await authRateLimit(db, "register-ip", clientIp(request));
     if (!limit.ok) return rateLimitedResponse(limit.retryAfterSeconds);
 
     const json = await readJsonBody(request);
@@ -19,7 +21,6 @@ export async function POST(request: Request) {
     const input = parseRegistration(json.body);
     if (!input.ok) return errorResponse(400, "VALIDATION_ERROR", input.message);
 
-    const db = createAdminClient();
     const result = await registerCustomer(db, input.value);
     if (!result.ok) {
       return errorResponse(409, "EMAIL_TAKEN", "An account with this email already exists. Log in instead.");

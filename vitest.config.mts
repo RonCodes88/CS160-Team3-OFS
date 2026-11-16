@@ -11,7 +11,7 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts", "src/**/types.ts"],
-      reporter: ["text-summary", "text", "html"],
+      reporter: ["text-summary", "text", "html", "json"],
       thresholds: {
         // Global floor a few points under coverage measured without a database
         // (how CI's check job runs). Raise it as coverage grows; never lower it.

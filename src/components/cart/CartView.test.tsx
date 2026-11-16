@@ -40,6 +40,12 @@ describe("CartSummary", () => {
     expect(html).toContain("Add an item to check out.");
   });
 
+  it("waits for a pending cart change before offering checkout", () => {
+    const html = renderToStaticMarkup(<CartSummary itemCount={2} totals={totals()} busy />);
+    expect(html).not.toContain('href="/checkout"');
+    expect(html).toContain("Saving your cart…");
+  });
+
   it("disables checkout and explains the 200 lb limit when over weight", () => {
     const html = render(3, totals({ totalWeight: 20001, deliveryFeeCents: 1000, overWeightLimit: true }));
     expect(html).not.toContain('href="/checkout"');

@@ -68,7 +68,7 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
   // The last cart the server confirmed, and the quantities not yet saved.
   const saved = useRef<ShopCartLine[]>([]);
   const wanted = useRef(new Map<string, ShopCartLine>());
-  const saving = useRef(new Set<string>());
+  const saving = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +102,7 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Every click shows right away. Saves for a product go one at a time, each
+  // Every click shows right away. Cart saves go one at a time, each
   // sending the latest quantity, so quick clicks are never lost or reordered.
   // The server still checks stock and the weight limit; a rejected change
   // rolls back to the last saved cart.
@@ -117,40 +117,40 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
       quantity,
     });
     setLines(withWanted(saved.current, wanted.current));
-    if (!saving.current.has(product.id)) void save(product.id);
+    setPending(new Set(wanted.current.keys()));
+    if (!saving.current) void save();
   }
 
-  async function save(productId: string) {
-    saving.current.add(productId);
-    setPending((p) => new Set(p).add(productId));
-
+  async function save() {
+    saving.current = true;
+    // Every response contains the entire cart. Serialize across products so
+    // an older response cannot overwrite the result of a newer mutation.
     try {
-      for (;;) {
-        const quantity = wanted.current.get(productId)?.quantity;
-        if (quantity === undefined) break;
-        const response = await fetch("/api/cart", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, quantity }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error?.message ?? "Unable to update your cart.");
-        saved.current = toLines(data as ApiCart);
-        setTotals(mapCartTotals(data));
-        // Done unless the shopper clicked again while this was saving.
-        if (wanted.current.get(productId)?.quantity === quantity) wanted.current.delete(productId);
+      while (wanted.current.size > 0) {
+        const next = wanted.current.entries().next().value;
+        if (!next) break;
+        const [productId, line] = next;
+        const quantity = line.quantity;
+        try {
+          const response = await fetch("/api/cart", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, quantity }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error?.message ?? "Unable to update your cart.");
+          saved.current = toLines(data as ApiCart);
+          setTotals(mapCartTotals(data));
+          if (wanted.current.get(productId)?.quantity === quantity) wanted.current.delete(productId);
+        } catch (e) {
+          wanted.current.delete(productId);
+          setError(e instanceof Error ? e.message : "Unable to update your cart.");
+        }
+        setLines(withWanted(saved.current, wanted.current));
+        setPending(new Set(wanted.current.keys()));
       }
-    } catch (e) {
-      wanted.current.delete(productId);
-      setError(e instanceof Error ? e.message : "Unable to update your cart.");
     } finally {
-      saving.current.delete(productId);
-      setLines(withWanted(saved.current, wanted.current));
-      setPending((p) => {
-        const next = new Set(p);
-        next.delete(productId);
-        return next;
-      });
+      saving.current = false;
     }
   }
 

@@ -4,6 +4,10 @@ import { formatAddressLine, parseAddressInput } from "./addressValidation";
 const VALID = { line1: "87 N San Pedro St", city: "San Jose", state: "ca", postalCode: "95110" };
 
 describe("parseAddressInput", () => {
+
+  it.each(["label", "line1", "line2", "city"])("rejects NUL in %s before geocoding or writing", (field) => {
+    expect(parseAddressInput({ ...VALID, [field]: "a\u0000b" }).ok).toBe(false);
+  });
   it("normalizes text and copies only address fields", () => {
     const parsed = parseAddressInput({
       ...VALID, line1: "  87  N San Pedro St ", line2: " ", label: "Home",

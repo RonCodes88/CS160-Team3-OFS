@@ -11,14 +11,15 @@ export type ClaimedNotification = {
   recipientEmail: string;
   payload: Record<string, unknown>;
   attempts: number;
+  claimToken: string;
 };
 
 export type NotificationStore = {
   /** Leases up to `limit` unsent rows so no other sender picks them up. */
   claim(limit: number): Promise<ClaimedNotification[]>;
   loadOrder(orderId: string): Promise<OrderSummary | null>;
-  markSent(id: string): Promise<void>;
-  markFailed(id: string, message: string): Promise<void>;
+  markSent(id: string, claimToken: string): Promise<void>;
+  markFailed(id: string, message: string, claimToken: string): Promise<void>;
 };
 
 /** Failed rows are retried until they have been attempted this many times. */
@@ -33,6 +34,7 @@ type NotificationRow = {
   recipient_email: string;
   payload: Record<string, unknown> | null;
   attempts: number;
+  claim_token: string;
 };
 
 export function createNotificationStore(db: SupabaseClient): NotificationStore {
@@ -50,6 +52,7 @@ export function createNotificationStore(db: SupabaseClient): NotificationStore {
         recipientEmail: row.recipient_email,
         payload: row.payload ?? {},
         attempts: row.attempts,
+        claimToken: row.claim_token,
       }));
     },
 
@@ -58,19 +61,13 @@ export function createNotificationStore(db: SupabaseClient): NotificationStore {
       return getOrderSummary(db, orderId);
     },
 
-    async markSent(id) {
-      const { error } = await db
-        .from("notifications")
-        .update({ status: "SENT", sent_at: new Date().toISOString(), error_message: null, locked_until: null })
-        .eq("id", id);
+    async markSent(id, claimToken) {
+      const { error } = await db.rpc("finish_notification", { p_id:id,p_token:claimToken,p_error:null });
       if (error) throw new Error(`marking notification ${id} sent failed: ${error.message}`);
     },
 
-    async markFailed(id, message) {
-      const { error } = await db
-        .from("notifications")
-        .update({ status: "FAILED", error_message: message.slice(0, MAX_ERROR_LENGTH), locked_until: null })
-        .eq("id", id);
+    async markFailed(id, message, claimToken) {
+      const { error } = await db.rpc("finish_notification", { p_id:id,p_token:claimToken,p_error:message.slice(0,MAX_ERROR_LENGTH) });
       if (error) throw new Error(`marking notification ${id} failed: ${error.message}`);
     },
   };

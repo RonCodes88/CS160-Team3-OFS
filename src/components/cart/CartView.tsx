@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ShoppingBasket } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StickyTag } from "@/components/ui/StickyTag";
@@ -21,6 +21,7 @@ export function CartView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const updating = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +72,8 @@ export function CartView() {
   }, []);
 
   async function change(productId: string, quantity: number) {
+    if (updating.current) return;
+    updating.current = true;
     setError(null);
     setUpdatingId(productId);
 
@@ -104,6 +107,7 @@ export function CartView() {
           : "Network error while updating cart.",
       );
     } finally {
+      updating.current = false;
       setUpdatingId(null);
     }
   }
@@ -176,7 +180,7 @@ export function CartView() {
                 <CartItemRow
                   key={item.productId}
                   item={item}
-                  isBusy={updatingId === item.productId}
+                  isBusy={updatingId !== null}
                   onChange={change}
                 />
               ))}
@@ -184,7 +188,7 @@ export function CartView() {
           )}
         </div>
 
-        <CartSummary itemCount={items.length} totals={totals} />
+        <CartSummary itemCount={items.length} totals={totals} busy={updatingId !== null} />
       </div>
     </section>
   );

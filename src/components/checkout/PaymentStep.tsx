@@ -38,7 +38,7 @@ export function PaymentStep({ publishableKey, clientSecret, ...props }: Props) {
       <p className="mt-2 flex items-center gap-2 text-base text-pencil/70">
         <Lock aria-hidden strokeWidth={2.5} className="h-4 w-4" /> Test mode: use card 4242 4242 4242 4242.
       </p>
-      <Elements stripe={getStripe(publishableKey)} options={{ clientSecret, appearance: { theme: "flat" } }}>
+      <Elements key={clientSecret} stripe={getStripe(publishableKey)} options={{ clientSecret, appearance: { theme: "flat" } }}>
         <PaymentForm {...props} />
       </Elements>
     </Card>
@@ -64,6 +64,8 @@ function PaymentForm({ totalCents, finalizing, onCardError, onAuthorized }: Omit
       });
       if (error) onCardError(error.message ?? "Your payment didn't go through. Try again.");
       else onAuthorized();
+    } catch {
+      onCardError("We couldn't confirm your payment. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }

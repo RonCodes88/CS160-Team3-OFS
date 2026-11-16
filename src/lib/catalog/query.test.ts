@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MAX_SEARCH_LENGTH, parseShopQuery, shopHref } from "./query";
 
 describe("parseShopQuery", () => {
+
+  it("normalizes control characters before database searches", () => {
+    expect(parseShopQuery({ q: "milk\u0000eggs\u007f" })).toEqual({ q: "milk eggs" });
+  });
   it("returns no filters for empty params", () => {
     expect(parseShopQuery({})).toEqual({});
   });

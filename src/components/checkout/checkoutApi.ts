@@ -165,9 +165,9 @@ export async function cancelPayment(fetcher: Fetch = fetch): Promise<{ ok: true 
 const STORAGE_KEY = "ofs:checkout-payment";
 
 /** Storage can be missing or blocked (private windows); checkout still works without it. */
-export function loadPaymentSession(storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): PaymentSession | null {
+export function loadPaymentSession(storage?: Pick<Storage, "getItem">): PaymentSession | null {
   try {
-    const value = JSON.parse(storage?.getItem(STORAGE_KEY) ?? "null") as PaymentSession | null;
+    const value = JSON.parse((storage ?? globalThis.localStorage)?.getItem(STORAGE_KEY) ?? "null") as PaymentSession | null;
     if (!value || typeof value.key !== "string" || typeof value.addressId !== "string" || typeof value.expected !== "object") {
       return null;
     }
@@ -178,10 +178,11 @@ export function loadPaymentSession(storage: Pick<Storage, "getItem"> | undefined
 }
 
 export function storePaymentSession(session: PaymentSession | null,
-  storage: Pick<Storage, "setItem" | "removeItem"> | undefined = globalThis.localStorage): void {
+  storage?: Pick<Storage, "setItem" | "removeItem">): void {
   try {
-    if (session) storage?.setItem(STORAGE_KEY, JSON.stringify(session));
-    else storage?.removeItem(STORAGE_KEY);
+    const target = storage ?? globalThis.localStorage;
+    if (session) target?.setItem(STORAGE_KEY, JSON.stringify(session));
+    else target?.removeItem(STORAGE_KEY);
   } catch {
     // Without storage a reload starts over; the server still prevents a double charge.
   }

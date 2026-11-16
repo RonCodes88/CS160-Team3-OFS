@@ -8,6 +8,7 @@ import {
 } from "./optimization";
 import { RoutingError } from "./mapbox";
 import { persistOptimizedTrip } from "./persistence";
+import { readServiceArea } from "@/lib/auth/serviceArea";
 
 // Optimize and save the route using stops loaded by trusted server-side code.
 export async function routeTrip(
@@ -138,5 +139,8 @@ export async function routeTripById(
   });
 
   // The save RPC rechecks trip assignments in a transaction before saving.
-  return routeTrip(db, tripId, stops, options);
+  // The worker must use the same approved store as address eligibility checks.
+  // Missing configuration leaves the trip pending for recovery after setup.
+  const origin = options.origin ?? readServiceArea().origin;
+  return routeTrip(db, tripId, stops, { ...options, origin });
 }

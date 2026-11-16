@@ -46,7 +46,7 @@ export default async function Page({ params }: PageProps<"/orders/[orderId]">) {
         Thanks! Your order is confirmed.
       </h1>
       <p className="mt-3 text-lg text-pencil/70">
-        Order <span className="font-mono text-base">{order.id}</span>. We&apos;ll email you a receipt.
+        Order <span className="font-mono text-base">{order.id}</span>. Your receipt is shown below.
       </p>
 
       <div className="mt-8 space-y-8">
@@ -77,7 +77,7 @@ export default async function Page({ params }: PageProps<"/orders/[orderId]">) {
             <Row label="Subtotal" value={formatCents(order.subtotalCents)} />
             <Row label="Total weight" value={formatWeight(order.totalWeight)} />
             <Row label="Delivery" value={order.deliveryFeeCents === 0 ? "Free" : formatCents(order.deliveryFeeCents)} />
-            <Row label="Tax" value={formatCents(order.taxCents)} />
+            <Row label="Demo tax (5%)" value={formatCents(order.taxCents)} />
             <div className="flex justify-between border-t-2 border-dashed border-pencil pt-3 font-heading text-2xl">
               <dt>Total paid</dt>
               <dd className="tabular-nums">{formatCents(order.totalCents)}</dd>

@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { RoutingError, type Route } from "./mapbox";
-import { routeTrip } from "./service";
+import { routeTrip, routeTripById } from "./service";
 
 const tripId = "11111111-1111-4111-8111-111111111111";
 
@@ -34,6 +34,41 @@ const validRoute: Route = {
     { distanceMeters: 1000, durationSeconds: 180 },
   ],
 };
+
+describe("worker route origin", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  function fixture() {
+    const rpc = vi.fn().mockImplementation(async (name: string) => ({
+      data: name === "get_trip_order_locations"
+        ? [{ order_id: stops[0].orderId, ...destination }]
+        : null,
+      error: null,
+    }));
+    const single = vi.fn().mockResolvedValue({ data: { status: "PLANNED", order_count: 1 }, error: null });
+    const db = { rpc, from: () => ({ select: () => ({ eq: () => ({ single }) }) }) } as unknown as SupabaseClient;
+    return { db, rpc, routeProvider: vi.fn().mockResolvedValue(validRoute) };
+  }
+
+  it("uses the configured store for the worker's database-loaded route", async () => {
+    vi.stubEnv("OFS_STORE_LATITUDE", "37.4");
+    vi.stubEnv("OFS_STORE_LONGITUDE", "-121.95");
+    vi.stubEnv("OFS_DELIVERY_RADIUS_METERS", "5000");
+    const { db, routeProvider } = fixture();
+    await routeTripById(db, tripId, { routeProvider });
+    expect(routeProvider).toHaveBeenCalledWith(expect.objectContaining({
+      origin: { lat: 37.4, lng: -121.95 },
+    }));
+  });
+
+  it("does not route from provisional coordinates when store configuration is missing", async () => {
+    vi.stubEnv("OFS_STORE_LATITUDE", "");
+    const { db, rpc, routeProvider } = fixture();
+    await expect(routeTripById(db, tripId, { routeProvider })).rejects.toThrow("service area is not configured");
+    expect(routeProvider).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("fail_trip_route", expect.anything());
+  });
+});
 
 describe("routeTrip", () => {
   it("optimizes and persists a successful route", async () => {

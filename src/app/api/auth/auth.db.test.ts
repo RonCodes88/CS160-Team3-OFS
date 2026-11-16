@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -34,8 +34,16 @@ const run = randomUUID().slice(0, 8);
 const email = (name: string) => `${name}-${run}@auth.test`;
 const PASSWORD = "correct horse battery";
 
+const limitKeys = new Set<string>();
 function post(path: string, body: unknown, cookie?: string) {
-  const headers: Record<string, string> = { "content-type": "application/json", "x-forwarded-for": randomUUID() };
+  const ip = randomUUID();
+  limitKeys.add(ip);
+  if (body && typeof body === "object" && "email" in body && typeof body.email === "string") {
+    const normalized = body.email.trim().toLowerCase();
+    limitKeys.add(normalized);
+    limitKeys.add(`${normalized}|${ip}`);
+  }
+  const headers: Record<string, string> = { "content-type": "application/json", "x-forwarded-for": ip };
   if (cookie) headers.cookie = cookie;
   return new NextRequest(`http://localhost${path}`, { method: "POST", headers, body: JSON.stringify(body) });
 }
@@ -55,13 +63,17 @@ describe.skipIf(!TEST_URL || !TEST_KEY)("auth routes against Postgres", () => {
   let db: SupabaseClient;
 
   beforeAll(() => {
+    process.env.OFS_TRUST_PROXY_HEADERS = "true";
     process.env.NEXT_PUBLIC_SUPABASE_URL = TEST_URL;
     process.env.SUPABASE_SECRET_KEY = TEST_KEY;
     db = createClient(TEST_URL!, TEST_KEY!, { auth: { persistSession: false } });
   });
 
   afterAll(async () => {
-    if (db) await db.from("users").delete().like("email", `%-${run}@auth.test`);
+    if (db) {
+      await db.from("users").delete().like("email", `%-${run}@auth.test`);
+      await db.from("auth_rate_limits").delete().in("key_hash", [...limitKeys].map(key => createHash("sha256").update(key).digest("hex")));
+    }
   });
 
   async function userRow(address: string) {

@@ -64,6 +64,9 @@ export function parsePage(params: URLSearchParams): Parsed<{ limit: number; offs
 /** `?q=&limit=&offset=` for GET /api/staff/inventory. */
 export function parseInventoryQuery(params: URLSearchParams): Parsed<InventoryQuery> {
   const search = (params.get("q") ?? "").trim();
+  if (search.includes("\u0000")) {
+    return { ok: false, message: "q cannot contain NUL characters." };
+  }
   if (search.length > MAX_SEARCH_LENGTH) {
     return { ok: false, message: `q must be at most ${MAX_SEARCH_LENGTH} characters.` };
   }

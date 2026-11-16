@@ -8,6 +8,7 @@ import type { ClaimedNotification, NotificationStore } from "@/lib/notifications
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("next/server", () => ({ after: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
+vi.mock("@/lib/notifications/sender", () => ({ getNotificationSender: () => ({ send: vi.fn() }) }));
 
 const ORDER: OrderSummary = {
   id: "3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41",
@@ -27,6 +28,7 @@ function claimed(id: string, overrides: Partial<ClaimedNotification> = {}): Clai
     recipientEmail: `${id}@example.com`,
     payload: {},
     attempts: 1,
+    claimToken: "lease",
     ...overrides,
   };
 }
@@ -59,9 +61,9 @@ describe("processPendingNotifications", () => {
       to: "a@example.com",
       subject: "Order #3F1C2B8E confirmed",
       text: expect.stringContaining("1 × Bananas"),
-    });
-    expect(store.markSent).toHaveBeenCalledWith("a");
-    expect(store.markSent).toHaveBeenCalledWith("b");
+    }, "a");
+    expect(store.markSent).toHaveBeenCalledWith("a", "lease");
+    expect(store.markSent).toHaveBeenCalledWith("b", "lease");
     expect(result).toEqual({ sent: 2, failed: 0 });
   });
 
@@ -71,8 +73,8 @@ describe("processPendingNotifications", () => {
 
     const result = await processPendingNotifications(store, sender);
 
-    expect(store.markFailed).toHaveBeenCalledWith("a", "SMTP timeout");
-    expect(store.markSent).toHaveBeenCalledWith("b");
+    expect(store.markFailed).toHaveBeenCalledWith("a", "SMTP timeout", "lease");
+    expect(store.markSent).toHaveBeenCalledWith("b", "lease");
     expect(store.markSent).not.toHaveBeenCalledWith("a");
     expect(result).toEqual({ sent: 1, failed: 1 });
   });
@@ -84,7 +86,7 @@ describe("processPendingNotifications", () => {
     const result = await processPendingNotifications(store, sender);
 
     expect(sender.send).not.toHaveBeenCalled();
-    expect(store.markFailed).toHaveBeenCalledWith("a", expect.stringContaining("not found"));
+    expect(store.markFailed).toHaveBeenCalledWith("a", expect.stringContaining("not found"), "lease");
     expect(result).toEqual({ sent: 0, failed: 1 });
   });
 

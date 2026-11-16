@@ -1,0 +1,11 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(5);
+select ok(not has_function_privilege('anon','public.auth_consume_rate_limit(text,text)','EXECUTE'), 'anonymous clients cannot control counters');
+select ok(not has_function_privilege('authenticated','public.auth_refund_rate_limit(text,text)','EXECUTE'), 'authenticated clients cannot refund counters');
+select ok(has_function_privilege('service_role','public.auth_consume_rate_limit(text,text)','EXECUTE'), 'backend can consume counters');
+select is((public.auth_consume_rate_limit('login-ip',repeat('a',64))->>'ok')::boolean,true,'first request allowed');
+update public.auth_rate_limits set attempts=30,expires_at=now()-interval '1 second' where scope='login-ip' and key_hash=repeat('a',64);
+select is((public.auth_consume_rate_limit('login-ip',repeat('a',64))->>'ok')::boolean,true,'expired exhausted counter resets');
+select * from finish();
+rollback;

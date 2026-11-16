@@ -19,6 +19,20 @@ vi.mock("@/lib/auth/session", async (importActual) => ({
   getSessionUser: vi.fn(),
 }));
 
+vi.mock("@/lib/auth/sharedRateLimit", async () => {
+  const { createRateLimiter } = await import("@/lib/auth/rateLimit");
+  const scopes = {
+    "register-ip": createRateLimiter({ limit: 30, windowMs: 900000 }),
+    "login-ip": createRateLimiter({ limit: 30, windowMs: 900000 }),
+    "login-pair": createRateLimiter({ limit: 10, windowMs: 900000 }),
+    "login-account": createRateLimiter({ limit: 100, windowMs: 900000 }),
+  };
+  return {
+    authRateLimit: async (_db: unknown, scope: keyof typeof scopes, key: string) => scopes[scope].hit(key),
+    refundAuthRateLimit: async (_db: unknown, scope: keyof typeof scopes, key: string) => scopes[scope].refund(key),
+  };
+});
+
 const CUSTOMER = { id: "u1", email: "ana@example.com", role: "CUSTOMER" as const };
 const SESSION = { token: "raw-token", expiresAt: new Date("2030-01-01T00:00:00Z") };
 
@@ -33,6 +47,7 @@ function post(path: string, body: unknown, { contentType = "application/json", i
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("OFS_TRUST_PROXY_HEADERS", "true");
   vi.mocked(createSession).mockResolvedValue(SESSION);
 });
 
@@ -75,10 +90,10 @@ describe("POST /api/auth/register", () => {
     vi.mocked(registerCustomer).mockResolvedValue({ ok: false, reason: "EMAIL_TAKEN" });
     const ip = randomUUID();
     const statuses = [];
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 30; i++) {
       statuses.push((await register(post("/api/auth/register", { email: "a@b.co", password: "longenough" }, { ip }))).status);
     }
-    expect(statuses.slice(0, 10).every((s) => s === 409)).toBe(true);
+    expect(statuses.slice(0, 30).every((s) => s === 409)).toBe(true);
     const blocked = await register(post("/api/auth/register", { email: "a@b.co", password: "longenough" }, { ip }));
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
@@ -113,13 +128,39 @@ describe("POST /api/auth/login", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  it("rate-limits repeated attempts on one email, across IPs", async () => {
+  it("rate-limits repeated attempts on one email from the same IP", async () => {
     vi.mocked(authenticate).mockResolvedValue(null);
     const email = `${randomUUID()}@b.co`;
-    for (let i = 0; i < 10; i++) await login(post("/api/auth/login", { email, password: "wrong" }));
-    const res = await login(post("/api/auth/login", { email, password: "wrong" }));
+    const ip = randomUUID();
+    for (let i = 0; i < 10; i++) await login(post("/api/auth/login", { email, password: "wrong" }, { ip }));
+    const res = await login(post("/api/auth/login", { email, password: "wrong" }, { ip }));
     expect(res.status).toBe(429);
     expect(authenticate).toHaveBeenCalledTimes(10);
+  });
+
+  it("does not let failed guesses from another IP lock out the owner", async () => {
+    const email = `${randomUUID()}@b.co`;
+    const attackerIp = randomUUID();
+    vi.mocked(authenticate).mockResolvedValue(null);
+    for (let i = 0; i < 10; i++) await login(post("/api/auth/login", { email, password: "wrong" }, { ip: attackerIp }));
+    vi.mocked(authenticate).mockResolvedValue(CUSTOMER);
+    expect((await login(post("/api/auth/login", { email, password: "right" }))).status).toBe(200);
+  });
+
+  it("successful logins do not exhaust a shared network's failure budget", async () => {
+    const ip = randomUUID();
+    vi.mocked(authenticate).mockResolvedValue(CUSTOMER);
+    for (let i = 0; i < 35; i++) {
+      expect((await login(post("/api/auth/login", { email: CUSTOMER.email, password: "right" }, { ip }))).status).toBe(200);
+    }
+  });
+
+  it("limits distributed guessing against one account", async () => {
+    const email = `${randomUUID()}@b.co`;
+    vi.mocked(authenticate).mockResolvedValue(null);
+    for (let i = 0; i < 100; i++) await login(post("/api/auth/login", { email, password: "wrong" }));
+    expect((await login(post("/api/auth/login", { email, password: "wrong" }))).status).toBe(429);
+    expect(authenticate).toHaveBeenCalledTimes(100);
   });
 
   it("rate-limits attempts from one IP, across emails", async () => {
@@ -131,11 +172,12 @@ describe("POST /api/auth/login", () => {
 
   it("clears the email's failure count after a successful login", async () => {
     const email = `${randomUUID()}@b.co`;
+    const ip = randomUUID();
     vi.mocked(authenticate).mockResolvedValue(null);
-    for (let i = 0; i < 9; i++) await login(post("/api/auth/login", { email, password: "wrong" }));
+    for (let i = 0; i < 9; i++) await login(post("/api/auth/login", { email, password: "wrong" }, { ip }));
     vi.mocked(authenticate).mockResolvedValueOnce(CUSTOMER);
-    expect((await login(post("/api/auth/login", { email, password: "right" }))).status).toBe(200);
-    expect((await login(post("/api/auth/login", { email, password: "wrong" }))).status).toBe(401);
+    expect((await login(post("/api/auth/login", { email, password: "right" }, { ip }))).status).toBe(200);
+    expect((await login(post("/api/auth/login", { email, password: "wrong" }, { ip }))).status).toBe(401);
   });
 });
 

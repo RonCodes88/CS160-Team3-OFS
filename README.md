@@ -2,6 +2,16 @@
 
 Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so you don't need Node installed.
 
+## Review and presentation
+
+- [Presentation notes and core code logic](docs/demo-guide.md)
+- [Readiness audit, fixed bugs, and remaining release blockers](docs/readiness-audit.md)
+- [Black-box acceptance checklist](docs/black-box-checklist.md)
+
+The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. Tracking remains in Noah's separate work.
+
+See [worker deployment and recovery commands](docs/run-workers.md) and [implementation decisions](docs/implementation-decisions.md).
+
 ## First-time setup
 
 **1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)** and open it.
@@ -67,7 +77,7 @@ Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Dock
 | `src/app/`                   | Pages and layouts                                       |
 | `src/lib/supabase/client.ts` | Supabase client for Client Components (`"use client"`)  |
 | `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
-| `src/proxy.ts`               | Refreshes the Supabase login session on each request    |
+| `src/proxy.ts`               | Supabase cookie refresh; OFS API access uses custom hashed sessions in `src/lib/auth` |
 | `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
 
 ## Database
@@ -123,7 +133,7 @@ Ask the team before adding a new package. All of these are installed by `npm ci`
 
 ### Delivery worker
 
-Run `npm run delivery:worker` in a separate terminal after starting local Supabase
+Run `docker compose --profile workers up --build -d` to start the web app plus delivery and recovery workers, or run `npm run delivery:worker` in a separate terminal after starting local Supabase
 and applying migrations. It reads `.env.local`, including the backend Supabase
 credentials and Mapbox configuration used by the routing service.
 `OFS_DELIVERY_WAIT_MINUTES` defaults to 20 and must be positive.
@@ -131,6 +141,5 @@ credentials and Mapbox configuration used by the routing service.
 The worker checks immediately on startup, then once per minute without overlapping
 ticks. Trips with 10 orders, 200 lb, or an expired oldest-order wait are atomically
 assigned and handed to routing. Other orders stay queued. “Immediately when full”
-means the next worker check (normally within a minute). Routing eligibility does
-not mark a vehicle OUT_FOR_DELIVERY. Keep the worker running separately from Next.js;
+means the next worker check (normally within a minute). After routing, the worker atomically assigns an AVAILABLE vehicle and marks the trip and its orders OUT_FOR_DELIVERY. Routed trips wait when no vehicle is available. Keep the worker running separately from Next.js;
 `npm run delivery:worker -- --once` performs one tick. Ctrl+C stops after in-flight work.

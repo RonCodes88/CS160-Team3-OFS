@@ -16,11 +16,13 @@ import { WeightMeter } from "./WeightMeter";
 export function CartSummary({
   itemCount,
   totals,
+  busy = false,
 }: {
   itemCount: number;
   totals: CartTotals;
+  busy?: boolean;
 }) {
-  const canCheckout = itemCount > 0 && !totals.overWeightLimit;
+  const canCheckout = itemCount > 0 && !totals.overWeightLimit && !busy;
 
   return (
     <aside aria-label="Order summary">
@@ -92,7 +94,7 @@ export function CartSummary({
 
         {!canCheckout && (
           <p className="mt-2 text-base text-pencil/70">
-            {itemCount === 0
+            {busy ? "Saving your cart…" : itemCount === 0
               ? "Add an item to check out."
               : "Bring the cart under the weight limit to check out."}
           </p>
