@@ -49,7 +49,7 @@ Pure rules such as `src/lib/cart/pricing.ts` and `src/lib/delivery/batching.ts` 
 | Delivery dispatch | `scripts/delivery-worker.ts` | `src/lib/delivery/dispatch.ts`, `departure.ts` |
 | Routing | `src/lib/routing/service.ts` | `optimization.ts`, `mapbox.ts`, `persistence.ts` |
 | Robot updates | `scripts/robot-simulator.ts` | `src/lib/vehicle`, `src/app/api/vehicle` |
-| Tracking data | `src/app/api/orders/[orderId]/tracking/route.ts` | `src/lib/orders/tracking.ts` |
+| Tracking data and map | `src/app/api/orders/[orderId]/tracking/route.ts` | `src/lib/orders/tracking.ts`, `src/components/tracking` |
 
 ## Persistent state and concurrency
 
@@ -65,4 +65,6 @@ The delivery worker checks immediately and then every minute. The oldest paid or
 
 Routing failure marks the trip `ROUTE_FAILED` and returns orders to the queue using their original paid times. Routed trips wait for an AVAILABLE vehicle. Departure atomically assigns the vehicle and changes order and trip state to `OUT_FOR_DELIVERY`. The simulated robot uses authenticated HTTP endpoints to report progress and location.
 
-The tracking API exists. The confirmation page is not a live tracking map. Rehearse the worker and robot separately using [the worker guide](run-workers.md).
+Customers follow an order at `/track/<order-id>`. The page polls the tracking API every 15 seconds and shows the route, destination, and robot on a map. Rehearse the worker and robot separately using [the worker guide](run-workers.md).
+
+See [API flows](api-flows.md#delivery-pipeline) for the delivery sequence and [the data model](data-model.md) for the tables involved.

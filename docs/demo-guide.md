@@ -58,7 +58,7 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 4. Show the confirmation totals and order snapshot.
 5. Sign in as an employee. Search inventory and update a quantity.
 6. Sign in as a manager. Edit a product, inspect the audit log, and explain retirement.
-7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. The tracking API is implemented; the live map page remains a placeholder.
+7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. Open `/track` as the customer to follow the robot on the map.
 
 ## Run the whole flow from the website
 
