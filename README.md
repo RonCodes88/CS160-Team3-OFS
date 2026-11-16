@@ -72,31 +72,33 @@ Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Dock
 
 ## Architecture
 
+OFS has three main parts: a storefront for customers, a dashboard for store staff, and a delivery engine that coordinates the robot.
+
 ```mermaid
-flowchart TD
-    Customer[Customer browser] --> Web[Next.js pages and React components]
-    Staff[Employee and manager browser] --> Web
-    Web --> API[Next.js API route handlers]
-    API --> Auth[Hashed sessions and role checks]
-    Auth --> Services[TypeScript service modules in src/lib]
-    Services --> DB[(Supabase PostgreSQL and PostGIS)]
-    Services --> Stripe[Stripe test payments]
-    Services --> Mapbox[Mapbox geocoding and road routing]
-    Stripe --> Webhook[Signed Stripe webhook]
-    Webhook --> Finalize[Shared payment finalization]
-    Services --> Finalize
-    Finalize --> DB
-    Delivery[Delivery worker] --> DB
-    Delivery --> Mapbox
-    Recovery[Payment recovery worker] --> Finalize
-    Robot[Simulated robot HTTP client] --> API
+flowchart LR
+    Customer[Customer] --> Storefront["Customer storefront<br/>Browse groceries, manage cart, check out"]
+    Staff["Employees and managers"] --> Dashboard["Staff dashboard<br/>Manage stock, products, and audit records"]
+
+    subgraph OFS[OFS grocery delivery service]
+        Storefront --> Orders["Orders and inventory<br/>Check availability, calculate totals, record purchases"]
+        Dashboard --> Orders
+        Orders -->|Paid orders| Delivery["Delivery engine<br/>Group orders, plan trips, assign a robot"]
+    end
+
+    Storefront -->|Pay securely| Stripe["Stripe<br/>Test payments"]
+    Stripe -->|Payment result| Orders
+    Delivery <-->|Addresses and road routes| Mapbox[Mapbox]
+    Delivery -->|Delivery stops| Robot[Simulated delivery robot]
+    Robot -->|Location and delivery progress| Delivery
 ```
 
-This is one Next.js application with service modules, plus separate delivery and payment-recovery processes. It is not a collection of independently deployed microservices. Routes check access and validate input. Services implement pricing, checkout, payment recovery, batching, and routing. PostgreSQL transactions enforce concurrent updates and preserve order snapshots. The current schema stores stock in `products.stock_quantity`.
+The customer storefront handles shopping and checkout. The staff dashboard lets employees update stock and lets managers maintain products and review changes. Both use the same order and inventory information, so purchases and staff edits affect what customers can buy.
 
-Money uses integer cents and weight uses integer hundredths of a pound. The server recalculates prices and totals. Stripe collects card details. OFS stores provider identifiers and payment state.
+After a successful payment, the delivery engine groups orders within the robot's capacity, plans a route, and assigns an available robot. The simulated robot reports its location and delivery progress. Stripe handles test payments, and Mapbox supplies address and road-routing information.
 
-Read [architecture and code ownership](docs/architecture.md), [API flows](docs/api-flows.md), and [demo rehearsal and test limits](docs/testing.md) before presenting. The [presentation guide](docs/demo-guide.md) gives a short spoken walkthrough.
+This diagram groups the product's responsibilities. The implementation uses one Next.js application with a shared database and separate background workers. The tracking API exists; the customer-facing live map is still a placeholder.
+
+Read [technical architecture and code ownership](docs/architecture.md), [API flows](docs/api-flows.md), and [demo rehearsal and test limits](docs/testing.md) for implementation details. The [presentation guide](docs/demo-guide.md) gives a short spoken walkthrough.
 
 ## Codebase structure
 

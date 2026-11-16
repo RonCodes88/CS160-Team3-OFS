@@ -4,9 +4,11 @@ OFS lets customers buy groceries online. Employees manage stock, managers manage
 
 ## Explain the architecture in 30 seconds
 
-Next.js serves the pages and API routes. Server-side TypeScript checks sessions, roles, and request input. PostgreSQL on Supabase stores customers, carts, payments, inventory, orders, and delivery state. PostGIS stores delivery locations. Stripe handles card details. Mapbox geocodes addresses and supplies road routes.
+OFS has three main parts. Customers use the storefront to shop and pay. Store employees and managers use the dashboard to keep stock and products up to date. Once an order is paid, the delivery engine groups it with nearby orders, plans a route, and assigns a simulated robot.
 
-The modules in `src/lib` define service boundaries inside one application. They are not independently deployed microservices. Inventory is stored in `products.stock_quantity`, rather than a separate inventory table.
+Stripe handles test payments. Mapbox provides address and road-route information. All three parts share the same order and inventory information, so the store and customer see consistent availability and purchase totals.
+
+Use the [README component diagram](../README.md#architecture) during this explanation. For technical questions, Next.js hosts the pages and API, PostgreSQL on Supabase stores data, and separate workers coordinate delivery and payment recovery. The modules in `src/lib` are service boundaries inside one application. Stock is stored in `products.stock_quantity`.
 
 ## Explain the core rules
 
