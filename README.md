@@ -5,7 +5,6 @@ Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so 
 ## Review and presentation
 
 - [Presentation notes and core code logic](docs/demo-guide.md)
-- [Readiness audit, fixed bugs, and remaining release blockers](docs/readiness-audit.md)
 - [Black-box acceptance checklist](docs/black-box-checklist.md)
 
 The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. Tracking remains in Noah's separate work.
