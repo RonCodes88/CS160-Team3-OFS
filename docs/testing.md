@@ -47,6 +47,8 @@ Browser regressions use port 3001 and `.next-browser`, with a harness on port 30
 
 The current browser suites do not drive a complete paid-order-to-delivered sequence through the delivery worker, real Mapbox routing, and simulated robot. Database and service tests cover those modules separately. Rehearse that sequence manually if it is part of the demo. The confirmation page shows order details; the tracking API is implemented separately from a live map UI.
 
+A successful purchase does not prove email delivery. The local payment run completed with `NOTIFICATIONS_NOT_CONFIGURED`; configure the notification sender separately if email is part of the presentation.
+
 The browser runs use Chromium. A mobile viewport exercises responsive layout but is not a real phone or WebKit test. External provider outages, webhook forwarding configuration, and worker process supervision still need a rehearsal check.
 
 On failure, inspect `test-results/`. Playwright retains traces for failed tests. Open a trace with `npx playwright show-trace <path-to-trace.zip>`. Fix the underlying failure before treating a retry as evidence of stability.
