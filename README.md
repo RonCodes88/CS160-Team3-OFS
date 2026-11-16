@@ -74,6 +74,8 @@ Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Dock
 
 OFS has three main parts: a storefront for customers, a dashboard for store staff, and a delivery engine that coordinates the robot.
 
+### Product view
+
 ```mermaid
 flowchart LR
     Customer[Customer] --> Storefront["Customer storefront<br/>Browse groceries, manage cart, check out"]
@@ -94,51 +96,142 @@ flowchart LR
 
 The customer storefront handles shopping and checkout. The staff dashboard lets employees update stock and lets managers maintain products and review changes. Both use the same order and inventory information, so purchases and staff edits affect what customers can buy.
 
-After a successful payment, the delivery engine groups orders within the robot's capacity, plans a route, and assigns an available robot. The simulated robot reports its location and delivery progress. Stripe handles test payments, and Mapbox supplies address and road-routing information.
+After a successful payment, the delivery engine groups orders within the robot's capacity, plans a route, and assigns an available robot. The simulated robot reports its location and delivery progress, and customers follow it on the tracking page. Stripe handles test payments, and Mapbox supplies address and road-routing information.
 
-This diagram groups the product's responsibilities. The implementation uses one Next.js application with a shared database and separate background workers. The tracking API exists; the customer-facing live map is still a placeholder.
+### Technical view
 
-Read [technical architecture and code ownership](docs/architecture.md), [API flows](docs/api-flows.md), and [demo rehearsal and test limits](docs/testing.md) for implementation details. The [presentation guide](docs/demo-guide.md) gives a short spoken walkthrough.
+The product parts above run as one Next.js application, one PostgreSQL database, and three separate Node processes.
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        CB["Customer browser"]
+        SB["Staff browser"]
+        RS["Robot simulator<br/>scripts/robot-simulator.ts"]
+    end
+
+    subgraph Next["Next.js app (src/)"]
+        Pages["Pages and React components<br/>src/app, src/components"]
+        Routes["API route handlers<br/>src/app/api"]
+        Guard["Session and role check<br/>src/lib/auth/requireRole.ts"]
+        Lib["Service modules<br/>src/lib"]
+        Pages --> Routes --> Guard --> Lib
+    end
+
+    subgraph Workers["Background workers (scripts/)"]
+        DW["Delivery worker<br/>batch, route, dispatch every minute"]
+        RW["Recovery worker<br/>retry payments and notifications"]
+    end
+
+    DB[("Supabase PostgreSQL + PostGIS<br/>tables and transactional functions")]
+    Stripe["Stripe (test mode)"]
+    Mapbox["Mapbox<br/>geocoding and directions"]
+    Email["Email provider<br/>(optional, Resend)"]
+
+    CB --> Pages
+    SB --> Pages
+    RS -->|"/api/vehicle/*"| Routes
+    Lib --> DB
+    Lib --> Stripe
+    Lib --> Mapbox
+    Stripe -->|"signed webhook"| Routes
+    DW --> Lib
+    RW --> Lib
+    RW --> Email
+```
+
+How a request moves through the code:
+
+1. A page in `src/app` renders components from `src/components`. A browser action calls a handler in `src/app/api`.
+2. The handler calls `requireRole`, which hashes the session cookie, loads the user, and returns 401 or 403 when access is not allowed.
+3. The handler validates the input and calls a service in `src/lib`, passing the user ID from the session.
+4. The service applies the business rules and calls a PostgreSQL function. Changes that must stay consistent (cart edits, order creation, stock updates, trip dispatch) each run as one database transaction.
+5. The handler returns the committed result or an error shaped as `{ error: { code, message } }`.
+
+The services named in the design (Auth, Catalog, Cart, Checkout, Order, Delivery Batching, Route Optimization, Vehicle Tracking, Inventory, Notification) are folders in `src/lib`, not separate deployments. The delivery worker and recovery worker import the same modules, so the rules are written once.
+
+### Order lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PAID: payment captured, order created
+    PAID --> BATCHED: delivery worker creates a trip
+    BATCHED --> PAID: routing failed, back to the queue
+    BATCHED --> OUT_FOR_DELIVERY: robot assigned and dispatched
+    OUT_FOR_DELIVERY --> DELIVERED: robot reports the stop delivered
+    DELIVERED --> [*]
+```
+
+Every status change writes a row to `order_status_history`. The schema also allows `PREPARING` and `CANCELED`.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [Architecture and code ownership](docs/architecture.md) | Components, where to find the code for each topic, concurrency |
+| [API reference](docs/api-reference.md) | Every endpoint: access, inputs, outputs, error codes |
+| [API flows](docs/api-flows.md) | Sign-in, cart, checkout and payment, delivery, and robot workflows with diagrams |
+| [Data model](docs/data-model.md) | Tables, relationships, status values, and database functions |
+| [Presentation guide](docs/demo-guide.md) | Short spoken walkthrough and a five-minute demo |
+| [Testing and rehearsal](docs/testing.md) | Test suites, commands, and what they do not prove |
+| [Workers and simulator](docs/run-workers.md) | Running delivery, recovery, and the simulated robot |
+| [Implementation decisions](docs/implementation-decisions.md) | Why the design differs from the original plan |
+| [Black-box checklist](docs/black-box-checklist.md) | Acceptance checks |
 
 ## Codebase structure
 
 ```text
 src/
-  app/                 Next.js pages, layouts, and API handlers
-    api/               auth, products, cart, checkout, staff, admin, vehicle, orders
-    shop/              Catalog and product detail pages
-    cart/              Cart page
-    checkout/          Checkout page
-    orders/            Private order confirmation
-    staff/             Employee and manager dashboard
-  components/          React UI grouped by cart, checkout, shop, staff, layout, ui
-  lib/                 Server services, validation, provider adapters, pure rules
-    auth/              Accounts, hashed sessions, roles, addresses, service area
-    cart/              Pricing and cart mutations
-    checkout/          Preview validation and demo tax
-    payments/          Stripe, idempotency, finalization, refunds, recovery
-    orders/            Order reads, queue, customer tracking data
-    delivery/          Batching, dispatch, vehicle assignment and departure
-    routing/           Stop ordering, Mapbox routes, route persistence
-    vehicle/           Vehicle location, stop transitions, simulator logic
-    notifications/     Notification messages, delivery, and retry state
-    catalog/           Catalog queries and sample data
-    inventory/         Inventory input validation
-    products/          Product validation
-    audit/             Staff change audit records
-    supabase/          Browser, server, and privileged database clients
-    api/               Shared API errors
-    db/                Database health checks
-scripts/               Delivery worker, recovery worker, robot simulator
-supabase/migrations/   Versioned schema and transactional database functions
-supabase/tests/        SQL rollback, inventory, and concurrency checks
-supabase/seed.sql       Local demo accounts and catalog
-e2e/                   Browser failure regressions with fixed provider responses
-e2e-live/              Real app, real local database, API and browser journeys
-docs/                  Architecture, API flows, testing, and presentation guides
+  app/                      Next.js pages, layouts, and API handlers
+    page.tsx                Landing page
+    shop/                   Catalog and product detail pages
+    cart/                   Cart page
+    checkout/               Checkout page
+    orders/[orderId]/       Private order confirmation
+    track/                  Order list and live tracking map
+    staff/                  Employee and manager dashboard
+    login/, register/       Sign-in and customer registration
+    api/                    One route.ts per endpoint
+      auth/                 register, login, logout, me
+      categories/, products/  Public catalog
+      cart/                 Read the cart, set a line quantity
+      addresses/            Saved delivery addresses
+      checkout/             preview, payment-intent, confirm, cancel
+      webhooks/stripe/      Signed Stripe events
+      orders/[orderId]/tracking/  Customer tracking data
+      staff/inventory/      Stock search, low stock, stock updates
+      admin/                Products and audit log (managers)
+      vehicle/              trip, location, stops (robot)
+  components/               React UI grouped by auth, cart, checkout, shop,
+                            staff, tracking, layout, ui
+  lib/                      Server services, validation, provider adapters, pure rules
+    auth/                   Accounts, hashed sessions, roles, rate limits, addresses, service area
+    catalog/                Catalog queries
+    cart/                   pricing.ts (fee and weight rules), cart mutations
+    checkout/               Preview validation and demo tax
+    payments/               Stripe adapter, idempotent attempts, finalization, recovery
+    orders/                 Order reads, delivery queue, tracking data
+    delivery/               batching.ts, dispatch.ts, job.ts (one worker tick), departure.ts
+    routing/                Stop ordering, Mapbox directions, route persistence
+    vehicle/                Assigned trip, location, stop updates, simulator logic
+    notifications/          Message text, sending, retry state
+    inventory/, products/   Staff stock and manager product rules
+    audit/                  Audit log reads
+    supabase/               Browser, server, and privileged database clients
+    api/errors.ts           Shared error response shape
+    env.ts                  Startup check of environment variables
+  proxy.ts                  Supabase cookie refresh
+scripts/                    delivery-worker.ts, recovery-worker.ts, robot-simulator.ts
+supabase/
+  migrations/               Versioned schema and transactional database functions
+  tests/                    SQL tests for rollback, inventory, and rate limits
+  seed.sql                  Local demo accounts and catalog
+e2e/                        Browser failure regressions with fixed provider responses
+e2e-live/                   Real app, real local database, API and browser journeys
+docs/                       The documents listed above
 ```
 
-Tests also live beside the code as `*.test.ts`, `*.test.tsx`, and `*.db.test.ts`. `src/proxy.ts` handles Supabase cookie refresh. OFS API authorization uses the custom sessions in `src/lib/auth`.
+Tests live beside the code as `*.test.ts`, `*.test.tsx`, and `*.db.test.ts` (database tests that need local Supabase). OFS API authorization uses the custom sessions in `src/lib/auth`, not Supabase Auth.
 
 ## Database
 
