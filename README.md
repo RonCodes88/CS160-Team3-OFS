@@ -8,7 +8,7 @@ Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so 
 - [Black-box acceptance checklist](docs/black-box-checklist.md)
 - [Demo rehearsal, test commands, and coverage limits](docs/testing.md)
 
-The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. The customer tracking API is implemented; the live tracking map UI remains a placeholder.
+The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. Customers can follow each order on a live tracking page with a map at `/track`.
 
 See [worker deployment and recovery commands](docs/run-workers.md) and [implementation decisions](docs/implementation-decisions.md).
 

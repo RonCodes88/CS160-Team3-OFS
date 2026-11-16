@@ -1,14 +1,14 @@
 import { after } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderSummary } from "@/lib/notifications/messages";
-import type { NotificationSender } from "@/lib/notifications/sender";
+import { getNotificationSender, type NotificationSender } from "@/lib/notifications/sender";
 import { processPendingNotifications, sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import type { ClaimedNotification, NotificationStore } from "@/lib/notifications/store";
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("next/server", () => ({ after: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
-vi.mock("@/lib/notifications/sender", () => ({ getNotificationSender: () => ({ send: vi.fn() }) }));
+vi.mock("@/lib/notifications/sender", () => ({ getNotificationSender: vi.fn(() => ({ send: vi.fn() })) }));
 
 const ORDER: OrderSummary = {
   id: "3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41",
@@ -140,6 +140,20 @@ describe("sendNotificationsAfterResponse", () => {
 
     await expect(scheduled()()).resolves.toBeUndefined();
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("explains in one line when email is not configured", async () => {
+    vi.mocked(getNotificationSender).mockImplementationOnce(() => {
+      throw new Error("NOTIFICATIONS_NOT_CONFIGURED");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    sendNotificationsAfterResponse();
+
+    await expect(scheduled()()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Email is not configured"));
+    expect(console.error).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("never lets scheduling problems reach checkout", () => {
