@@ -53,6 +53,16 @@ This review uses the supplied problem statement, `AGENTS.md`, application code, 
 
 The redirect, auth limiter, catalog error handling, and initial control-character changes originated in the previous session. This review added regression coverage and completed the surrounding fixes.
 
+## Follow-up fixes (second pass)
+
+| Defect | Result after the fix | Regression evidence |
+| --- | --- | --- |
+| A payment attempt saved before Stripe answered could never be canceled, so the cart stayed blocked | Canceling now finds or creates the Stripe payment with the attempt's own idempotency key, links it, and voids it. No second payment can be created. | `src/lib/payments/cancel.test.ts` |
+| The webhook answered 503 forever for payments this database never created | Payments without an OFS attempt ID are acknowledged unprocessed. An unknown OFS payment is retried for 10 minutes, then acknowledged. | `src/app/api/webhooks/stripe/route.test.ts` |
+| Two staff tabs editing one product: the last save silently won | The dashboard sends the count on screen. If the stock changed, the save is refused with 409, the new count is shown, and the list reloads. | `e2e-live/api.spec.ts`, inventory route tests |
+| A retired product could not be brought back | Managers get a Retired tab with a Reactivate button. Reactivation is audited as `PRODUCT_REACTIVATE`. | `e2e-live/api.spec.ts`, `e2e-live/customer.spec.ts` |
+| 30 sign-ups per 15 minutes shared by every visitor when no proxy is trusted | Unknown-IP traffic has its own budget of 300 sign-ups and 600 failed logins. | `e2e-live/api.spec.ts` (40 sign-ups in a row) |
+
 ## Resolution of the remaining audit items
 
 | Original issue | Current status | Evidence |
@@ -75,7 +85,7 @@ The redirect, auth limiter, catalog error handling, and initial control-characte
 - Configure `OFS_EMAIL_PROVIDER`, `OFS_EMAIL_FROM`, and `RESEND_API_KEY` before promising emailed receipts. Resend's idempotency window is 24 hours. Review provider state before manually retrying old ambiguous sends.
 - Start and supervise both delivery and recovery workers. Their Compose profile is opt-in so starting the website alone does not process an unintended database. Monitor failed ticks, queue age, and manual recovery items.
 - Keep the delivery wait at the agreed 20 minutes. `OFS_DELIVERY_WAIT_MINUTES` remains configurable.
-- Without a trusted proxy, every visitor shares one sign-up budget of 30 registrations per 15 minutes and one failed-login budget. A room of testers can exhaust it and see "Too many attempts". Deploy behind a proxy that sets the client IP and set `OFS_TRUST_PROXY_HEADERS=true` before a group test.
+- `OFS_TRUST_PROXY_HEADERS` is optional. Without it, the client IP is unknown and all visitors share one budget: 300 sign-ups and 600 failed logins per 15 minutes, enough for a room of testers. Each account still allows only 10 failed logins per 15 minutes. Turning the flag on behind a real proxy gives each IP its own tighter budget (30).
 - Enable forwarded-IP trust only behind a proxy that overwrites those headers and cannot be bypassed. Otherwise authentication uses a shared conservative unknown-IP budget.
 - The full LLD and original test plan remain unavailable. Stock physically lives in `products.stock_quantity`, and modules share one deployable application/database client. Resolve any stricter LLD ownership requirements before claiming full design compliance.
 - Noah's tracking work is excluded. Review its shared-trip route privacy and complete its customer acceptance separately.
@@ -88,7 +98,7 @@ Local checks completed against the separate local Supabase database:
 
 | Check | Result |
 | --- | --- |
-| Vitest with coverage | 100 files, 1,276 tests passed |
+| Vitest with coverage | 100 files, 1,290 tests passed |
 | Unit-only CI coverage | 1,069 passed, 207 database tests skipped; coverage gates passed |
 | Overall coverage | 75.76% statements, 78.03% branches, 68.66% functions, 76.98% lines |
 | Checkout library coverage | 97.33% statements, 97.26% branches |
@@ -99,7 +109,7 @@ Local checks completed against the separate local Supabase database:
 | TypeScript and Next route types | Passed |
 | Production build | Passed |
 | Chromium browser regressions | 11 tests passed; API responses mocked |
-| Live end-to-end and API integration (`npm run test:e2e:live`) | 24 tests passed against the real app and local database, including a Stripe test-card payment |
+| Live end-to-end and API integration (`npm run test:e2e:live`) | 27 tests passed against the real app and local database, including a Stripe test-card payment |
 | Merged frontend coverage | 63.58% lines; below the 70% target. CI enforces a 60% floor so it cannot drop |
 
 Re-run with the commands in [the black-box checklist](black-box-checklist.md). Coverage varies when database suites are skipped. Browser coverage is not merged into the Vitest percentages above.

@@ -2,7 +2,7 @@ import { errorResponse, internalErrorResponse } from "@/lib/api/errors";
 import { registerCustomer } from "@/lib/auth/accounts";
 import { rateLimitedResponse, readJsonBody, signedInResponse } from "@/lib/auth/http";
 import { clientIp } from "@/lib/auth/rateLimit";
-import { authRateLimit } from "@/lib/auth/sharedRateLimit";
+import { authRateLimit, ipScope } from "@/lib/auth/sharedRateLimit";
 import { createSession } from "@/lib/auth/session";
 import { parseRegistration } from "@/lib/auth/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,7 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function POST(request: Request) {
   try {
     const db = createAdminClient();
-    const limit = await authRateLimit(db, "register-ip", clientIp(request));
+    const ip = clientIp(request);
+    const limit = await authRateLimit(db, ipScope("register", ip), ip);
     if (!limit.ok) return rateLimitedResponse(limit.retryAfterSeconds);
 
     const json = await readJsonBody(request);

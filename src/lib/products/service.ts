@@ -126,6 +126,21 @@ export async function retireProduct(
   return { ok: true, product: toProduct(row.product), changed: row.changed };
 }
 
+/** Sets is_active = true again, so the product returns to the shop. */
+export async function reactivateProduct(
+  db: SupabaseClient,
+  actorUserId: string,
+  productId: string,
+): Promise<ProductResult> {
+  const result = await callProductFunction(db, "admin_reactivate_product", {
+    p_actor_user_id: actorUserId,
+    p_product_id: productId,
+  });
+  if (!result.ok) return result;
+  const row = result.data as ChangeRow;
+  return { ok: true, product: toProduct(row.product), changed: row.changed };
+}
+
 /** Maps a failed product change to the API's error response. */
 export function productFailureResponse(reason: ProductFailure): Response {
   switch (reason) {

@@ -172,20 +172,39 @@ describe("PUT /api/staff/inventory/:productId", () => {
     const response = await put(PRODUCT_ID, { quantity: 12 });
 
     expect(response.status).toBe(200);
-    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 12);
+    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 12, null);
     expect(await response.json()).toMatchObject({ oldQuantity: 5, newQuantity: 12, changed: true });
   });
 
   it("ignores user ids or roles sent in the body", async () => {
     signInAs("EMPLOYEE");
     await put(PRODUCT_ID, { quantity: 12, userId: "someone-else", role: "MANAGER" });
-    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 12);
+    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 12, null);
+  });
+
+  it("passes the quantity the person was looking at, and returns 409 when it is stale", async () => {
+    signInAs("EMPLOYEE");
+    vi.mocked(setInventoryQuantity).mockResolvedValueOnce({ ok: false, reason: "STALE", currentQuantity: 7 });
+    const response = await put(PRODUCT_ID, { quantity: 12, expectedQuantity: 5 });
+
+    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 12, 5);
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.error.message).toContain("7");
+    expect(body.currentQuantity).toBe(7);
+  });
+
+  it.each([-1, 1.5, "5", 2 ** 31])("rejects expectedQuantity %j with 400", async (expectedQuantity) => {
+    signInAs("EMPLOYEE");
+    expect((await put(PRODUCT_ID, { quantity: 1, expectedQuantity })).status).toBe(400);
+    expect(setInventoryQuantity).not.toHaveBeenCalled();
   });
 
   it("accepts 0", async () => {
     signInAs("EMPLOYEE");
     expect((await put(PRODUCT_ID, { quantity: 0 })).status).toBe(200);
-    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 0);
+    expect(setInventoryQuantity).toHaveBeenCalledWith({}, USER_ID, PRODUCT_ID, 0, null);
   });
 
   it.each([

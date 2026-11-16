@@ -4,7 +4,7 @@ import { cancelPendingPayments } from "./cancel";
 import { canonical, PaymentError, scopePaymentKey } from "./service";
 import { finalizePayment, type FinalizationAttempt, type FinalizationDependencies } from "./finalize";
 import { loadPaymentQuote } from "./quote";
-import { createStripeClient } from "./stripe";
+import { createAuthorizationIntent, createStripeClient } from "./stripe";
 
 export function finalizationDependencies(db: SupabaseClient): FinalizationDependencies {
   let stripe;
@@ -88,6 +88,25 @@ export async function cancelCustomerPayments(db: SupabaseClient, customerId: str
     retrieve: (id) => stripe.paymentIntents.retrieve(id),
     cancel: async (attempt) => {
       await stripe.paymentIntents.cancel(attempt.provider_payment_id, {}, { idempotencyKey: `ofs:void:${attempt.id}` });
+    },
+    link: async (attempt) => {
+      const { data, error } = await db.from("payment_attempts").select("total_cents")
+        .eq("id", attempt.id).eq("customer_id", customerId).single();
+      if (error || !data) throw new PaymentError(503, "PAYMENT_UNAVAILABLE", "Payment lookup is unavailable.");
+      let intent;
+      try {
+        intent = await createAuthorizationIntent(stripe.paymentIntents, { attemptId: attempt.id, totalCents: data.total_cents });
+      } catch {
+        throw new PaymentError(503, "PAYMENT_PROVIDER_UNAVAILABLE", "Payment is temporarily unavailable. Try again.");
+      }
+      if (intent.livemode || intent.metadata.attemptId !== attempt.id) {
+        throw new PaymentError(502, "PAYMENT_PROVIDER_MISMATCH", "The payment provider returned an inconsistent payment.");
+      }
+      const linked = await db.rpc("checkout_attach_payment_intent", {
+        p_customer_id: customerId, p_attempt_id: attempt.id, p_provider_id: intent.id,
+      });
+      if (linked.error) throw new PaymentError(503, "PAYMENT_UNAVAILABLE", "Payment link is unavailable.");
+      return intent.id;
     },
     finalize: (attemptId, id) => finalizePayment(attemptId, id, finalization),
   });

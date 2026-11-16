@@ -2,7 +2,17 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RateLimitResult } from "./rateLimit";
 
-export type AuthLimitScope = "register-ip" | "login-ip" | "login-pair" | "login-account";
+export type AuthLimitScope =
+  | "register-ip" | "login-ip" | "login-pair" | "login-account" | "register-shared" | "login-shared";
+
+/**
+ * When the client IP is unknown (no trusted proxy), every visitor lands in one
+ * bucket. That bucket gets its own larger budget so a room of real users is
+ * not locked out; the per-account login limits still apply to each email.
+ */
+export function ipScope(kind: "register" | "login", ip: string): AuthLimitScope {
+  return ip === "unknown" ? `${kind}-shared` : `${kind}-ip`;
+}
 const keyHash = (key: string) => createHash("sha256").update(key).digest("hex");
 
 /** Counters live in PostgreSQL, shared by every app replica. Identity stays hashed. */

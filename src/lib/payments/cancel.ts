@@ -9,6 +9,12 @@ export type CancelDependencies = {
   listPending(customerId: string): Promise<PendingAttempt[]>;
   retrieve(providerId: string): Promise<{ status: string }>;
   cancel(attempt: PendingAttempt & { provider_payment_id: string }): Promise<void>;
+  /**
+   * Finds or creates the Stripe payment for an attempt that was saved before
+   * Stripe answered, links it, and returns its ID. Creation reuses the
+   * attempt's idempotency key, so it can never make a second payment.
+   */
+  link(attempt: PendingAttempt): Promise<string>;
   /** The shared finalizer, which records a canceled intent as VOIDED. */
   finalize(attemptId: string, customerId: string): Promise<{ status: string }>;
 };
@@ -24,15 +30,15 @@ export async function cancelPendingPayments(customerId: string, deps: CancelDepe
   if (!customerId) throw new Error("A verified customer identity is required.");
   let canceled = 0;
   for (const attempt of await deps.listPending(customerId)) {
-    if (!attempt.provider_payment_id) {
-      throw new PaymentError(409, "PAYMENT_RECONCILIATION_REQUIRED", "This payment needs reconciliation before it can be canceled.");
-    }
-    const intent = await deps.retrieve(attempt.provider_payment_id);
+    // The customer only receives the client secret after the link is saved, so
+    // an unlinked attempt was never shown a card form and holds no money.
+    const providerId = attempt.provider_payment_id ?? await deps.link(attempt);
+    const intent = await deps.retrieve(providerId);
     if (intent.status !== "canceled") {
       if (!UNAUTHORIZED_STATES.includes(intent.status)) {
         throw new PaymentError(409, "PAYMENT_ALREADY_AUTHORIZED", "This payment was already authorized. Finish confirming it instead.");
       }
-      await deps.cancel({ ...attempt, provider_payment_id: attempt.provider_payment_id });
+      await deps.cancel({ ...attempt, provider_payment_id: providerId });
     }
     const result = await deps.finalize(attempt.id, customerId);
     if (result.status !== "VOIDED") {
