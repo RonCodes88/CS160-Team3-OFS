@@ -120,6 +120,7 @@ export async function optimizeTripRoute(
     origin,
     stops: ordered.map((stop) => stop.location),
     returnToOrigin: true,
+    departureTime,
   });
 
   // Make sure the provider returned valid travel times for every route leg.

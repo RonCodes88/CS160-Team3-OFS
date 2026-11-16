@@ -121,4 +121,21 @@ describe("payment session storage", () => {
     const blocked = { setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } };
     expect(() => storePaymentSession(SESSION, blocked)).not.toThrow();
   });
+
+  it("works when the browser blocks access to the storage property itself", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() { throw new Error("Storage disabled"); },
+    });
+    try {
+      expect(() => loadPaymentSession()).not.toThrow();
+      expect(loadPaymentSession()).toBeNull();
+      expect(() => storePaymentSession(SESSION)).not.toThrow();
+      expect(() => storePaymentSession(null)).not.toThrow();
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
 });

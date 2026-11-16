@@ -20,6 +20,7 @@ function text(body: Record<string, unknown>, key: string): string | null | undef
   const value = body[key];
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") return undefined;
+  if (value.includes("\u0000")) return undefined;
   const trimmed = value.trim().replace(/\s+/g, " ");
   return trimmed === "" ? null : trimmed;
 }

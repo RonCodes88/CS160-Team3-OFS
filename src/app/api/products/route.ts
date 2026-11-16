@@ -1,15 +1,20 @@
+import { internalErrorResponse } from "@/lib/api/errors";
 import { parseShopQuery } from "@/lib/catalog/query";
 import { searchCatalogProducts } from "@/lib/catalog/service";
 
 export async function GET(request: Request) {
-    const url = new URL(request.url);
+    try {
+        const url = new URL(request.url);
 
-    const query = parseShopQuery({
-        q: url.searchParams.get("q") ?? undefined,
-        category: url.searchParams.get("category") ?? undefined,
-    });
+        const query = parseShopQuery({
+            q: url.searchParams.get("q") ?? undefined,
+            category: url.searchParams.get("category") ?? undefined,
+        });
 
-    const products = await searchCatalogProducts(query);
+        const products = await searchCatalogProducts(query);
 
-    return Response.json({ products });
+        return Response.json({ products });
+    } catch (err) {
+        return internalErrorResponse(err);
+    }
 }

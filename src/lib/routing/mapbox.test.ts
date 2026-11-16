@@ -67,7 +67,8 @@ describe("fetchTripRoute request", () => {
 
     expect(requests).toEqual([
       {
-        profile: "driving",
+        profile: "driving-traffic",
+        departAt: expect.any(String),
         waypoints: [
           { coordinates: [STORE_LOCATION.lng, STORE_LOCATION.lat] },
           { coordinates: [A.lng, A.lat] },
@@ -79,6 +80,20 @@ describe("fetchTripRoute request", () => {
         steps: false,
       },
     ]);
+  });
+
+  it("sends the actual departure time to traffic routing", async () => {
+    const { service, requests } = fakeDirections({ body: okBody(2) });
+    const departureTime = new Date("2026-11-16T16:30:00Z");
+    await fetchTripRoute({ stops: [A], departureTime }, { directions: service });
+    expect(requests[0]).toMatchObject({ profile: "driving-traffic", departAt: "2026-11-16T16:30:00Z" });
+  });
+
+  it("rejects invalid departure dates before calling Mapbox", async () => {
+    const { service, requests } = fakeDirections({ body: okBody(2) });
+    await expect(fetchTripRoute({ stops: [A], departureTime: new Date(NaN) }, { directions: service }))
+      .rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(requests).toEqual([]);
   });
 
   it("can skip the return leg, use another origin, and use another profile", async () => {

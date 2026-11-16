@@ -3,6 +3,7 @@ import { getPendingDeliveryOrders } from "../src/lib/orders/queue";
 import { routeTripById } from "../src/lib/routing/service";
 import { runDeliveryTick } from "../src/lib/delivery/job";
 import { waitLimitMinutes } from "../src/lib/delivery/dispatch";
+import { departWithFreshRoute } from "../src/lib/delivery/departure";
 
 try { process.loadEnvFile(".env.local"); } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -31,7 +32,13 @@ async function main() {
           return data.map(trip => trip.id);
         },
         route: id => routeTripById(db, id),
-        report: error => console.error("Trip routing failed:", error),
+        routedTrips: async () => {
+          const { data, error } = await db.from("trips").select("id").eq("status", "ROUTED").order("created_at");
+          if (error) throw error;
+          return data.map(trip => trip.id);
+        },
+        depart: id => departWithFreshRoute(db, id),
+        report: error => console.error("Delivery operation failed:", error),
       }, new Date(), minutes);
     } catch (error) { console.error("Delivery tick failed:", error); }
     if (stopping || process.argv.includes("--once")) break;

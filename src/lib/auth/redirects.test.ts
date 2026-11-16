@@ -20,3 +20,16 @@ describe("safeNextPath", () => {
     expect(safeNextPath(next)).toBeNull();
   });
 });
+
+describe("safeNextPath control characters", () => {
+  it.each(["/\t/evil.example", "/\n/evil.example", "/\r/evil.example", "/a\\b", "/\u0000x"])(
+    "rejects %j",
+    (value) => {
+      expect(safeNextPath(value)).toBeNull();
+    },
+  );
+
+  it("still allows ordinary paths with a query", () => {
+    expect(safeNextPath("/orders/abc?x=1")).toBe("/orders/abc?x=1");
+  });
+});

@@ -10,6 +10,10 @@ import {
 } from "@/lib/inventory/validation";
 
 describe("isUuid", () => {
+
+  it("rejects NUL searches before Postgres rejects the query", () => {
+    expect(parseInventoryQuery(new URLSearchParams({ q: "milk\u0000" })).ok).toBe(false);
+  });
   it("accepts canonical UUIDs in either case", () => {
     expect(isUuid("3f1c2b8e-9a4d-4e2f-8b1a-0c9d7e6f5a41")).toBe(true);
     expect(isUuid("3F1C2B8E-9A4D-4E2F-8B1A-0C9D7E6F5A41")).toBe(true);

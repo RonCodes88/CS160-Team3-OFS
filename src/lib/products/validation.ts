@@ -28,6 +28,7 @@ type Field = { column: keyof ProductFields; parse: (value: unknown) => Parsed<un
 function requiredText(name: string, max: number) {
   return (value: unknown): Parsed<string> => {
     if (typeof value !== "string") return { ok: false, message: `${name} must be text.` };
+    if (value.includes("\u0000")) return { ok: false, message: `${name} cannot contain NUL characters.` };
     const text = value.trim();
     if (!text) return { ok: false, message: `${name} cannot be blank.` };
     if (text.length > max) return { ok: false, message: `${name} must be at most ${max} characters.` };
@@ -37,6 +38,7 @@ function requiredText(name: string, max: number) {
 
 function parseDescription(value: unknown): Parsed<string> {
   if (typeof value !== "string") return { ok: false, message: "description must be text." };
+  if (value.includes("\u0000")) return { ok: false, message: "description cannot contain NUL characters." };
   const text = value.trim();
   if (text.length > MAX_DESCRIPTION_LENGTH) {
     return { ok: false, message: `description must be at most ${MAX_DESCRIPTION_LENGTH} characters.` };
@@ -48,6 +50,7 @@ function parseDescription(value: unknown): Parsed<string> {
 function parseImageUrl(value: unknown): Parsed<string | null> {
   if (value === null) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false, message: "imageUrl must be a URL or null." };
+  if (value.includes("\u0000")) return { ok: false, message: "imageUrl cannot contain NUL characters." };
   const text = value.trim();
   if (!text) return { ok: true, value: null };
   if (text.length > MAX_IMAGE_URL_LENGTH) return { ok: false, message: "imageUrl is too long." };

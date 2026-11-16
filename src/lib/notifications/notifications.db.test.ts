@@ -291,5 +291,32 @@ describe.skipIf(!TEST_URL || !TEST_KEY)("notifications against Postgres", () => 
       expect(ids(first)).toContain(row.id);
       expect(ids(second)).not.toContain(row.id);
     });
+
+    it("rejects both success and failure acknowledgements from an expired lease owner", async () => {
+      const orderId = await newOrder();
+      await setStatus(orderId, "PAID");
+      const store = createNotificationStore(db);
+      const old = (await store.claim(100)).find((row) => row.orderId === orderId);
+      expect(old).toBeDefined();
+      const expired = await db.from("notifications").update({ locked_until: "2000-01-01T00:00:00Z" }).eq("id", old!.id);
+      expect(expired.error).toBeNull();
+      const current = (await store.claim(100)).find((row) => row.orderId === orderId);
+      expect(current).toBeDefined();
+      expect(current!.claimToken).not.toBe(old!.claimToken);
+      await expect(store.markSent(old!.id, old!.claimToken)).rejects.toThrow("claim lost");
+      await expect(store.markFailed(old!.id, "stale", old!.claimToken)).rejects.toThrow("claim lost");
+      await store.markSent(current!.id, current!.claimToken);
+      expect((await notificationsFor(orderId))[0].status).toBe("SENT");
+    });
+
+    it("does not reclaim crashed PENDING rows after their retry budget is exhausted", async () => {
+      const orderId = await newOrder();
+      await setStatus(orderId, "PAID");
+      const [row] = await notificationsFor(orderId);
+      const expired = await db.from("notifications").update({ attempts: MAX_ATTEMPTS, locked_until: "2000-01-01T00:00:00Z" }).eq("id", row.id);
+      expect(expired.error).toBeNull();
+      const batch = await createNotificationStore(db).claim(100);
+      expect(batch.map((item) => item.id)).not.toContain(row.id);
+    });
   });
 });

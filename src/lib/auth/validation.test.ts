@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { MAX_PASSWORD_LENGTH, normalizeEmail, parseLogin, parseRegistration } from "./validation";
 
 describe("normalizeEmail", () => {
+
+  it.each(["a\u0000@b.co", "a\u0001@b.co", "a\u007f@b.co"])("rejects control characters in email %j", (email) => {
+    expect(parseRegistration({ email, password: "longenough" }).ok).toBe(false);
+    expect(parseLogin({ email, password: "longenough" }).ok).toBe(false);
+  });
   it("trims and lowercases", () => {
     expect(normalizeEmail("  Ana@Example.COM ")).toBe("ana@example.com");
   });
