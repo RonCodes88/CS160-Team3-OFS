@@ -6,8 +6,9 @@ Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so 
 
 - [Presentation notes and core code logic](docs/demo-guide.md)
 - [Black-box acceptance checklist](docs/black-box-checklist.md)
+- [Demo rehearsal, test commands, and coverage limits](docs/testing.md)
 
-The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. Tracking remains in Noah's separate work.
+The app remains a Stripe test-mode class project with demo tax. Delivery dispatch, traffic-aware road routing, and a simulated robot are implemented. Configure and supervise the workers before running deliveries. The customer tracking API is implemented; the live tracking map UI remains a placeholder.
 
 See [worker deployment and recovery commands](docs/run-workers.md) and [implementation decisions](docs/implementation-decisions.md).
 
@@ -69,15 +70,75 @@ git push -u origin my-feature
 
 Then open a Pull Request on GitHub. CI (lint, typecheck, unit tests, build, Docker build) runs on every PR and must pass before you can merge.
 
-## Where things are
+## Architecture
 
-| Path                         | What                                                    |
-| ---------------------------- | ------------------------------------------------------- |
-| `src/app/`                   | Pages and layouts                                       |
-| `src/lib/supabase/client.ts` | Supabase client for Client Components (`"use client"`)  |
-| `src/lib/supabase/server.ts` | Supabase client for Server Components, Actions, Routes  |
-| `src/proxy.ts`               | Supabase cookie refresh; OFS API access uses custom hashed sessions in `src/lib/auth` |
-| `supabase/migrations/`       | Database schema changes (`npx supabase migration new <name>`) |
+OFS has three main parts: a storefront for customers, a dashboard for store staff, and a delivery engine that coordinates the robot.
+
+```mermaid
+flowchart LR
+    Customer[Customer] --> Storefront["Customer storefront<br/>Browse groceries, manage cart, check out"]
+    Staff["Employees and managers"] --> Dashboard["Staff dashboard<br/>Manage stock, products, and audit records"]
+
+    subgraph OFS[OFS grocery delivery service]
+        Storefront --> Orders["Orders and inventory<br/>Check availability, calculate totals, record purchases"]
+        Dashboard --> Orders
+        Orders -->|Paid orders| Delivery["Delivery engine<br/>Group orders, plan trips, assign a robot"]
+    end
+
+    Storefront -->|Pay securely| Stripe["Stripe<br/>Test payments"]
+    Stripe -->|Payment result| Orders
+    Delivery <-->|Addresses and road routes| Mapbox[Mapbox]
+    Delivery -->|Delivery stops| Robot[Simulated delivery robot]
+    Robot -->|Location and delivery progress| Delivery
+```
+
+The customer storefront handles shopping and checkout. The staff dashboard lets employees update stock and lets managers maintain products and review changes. Both use the same order and inventory information, so purchases and staff edits affect what customers can buy.
+
+After a successful payment, the delivery engine groups orders within the robot's capacity, plans a route, and assigns an available robot. The simulated robot reports its location and delivery progress. Stripe handles test payments, and Mapbox supplies address and road-routing information.
+
+This diagram groups the product's responsibilities. The implementation uses one Next.js application with a shared database and separate background workers. The tracking API exists; the customer-facing live map is still a placeholder.
+
+Read [technical architecture and code ownership](docs/architecture.md), [API flows](docs/api-flows.md), and [demo rehearsal and test limits](docs/testing.md) for implementation details. The [presentation guide](docs/demo-guide.md) gives a short spoken walkthrough.
+
+## Codebase structure
+
+```text
+src/
+  app/                 Next.js pages, layouts, and API handlers
+    api/               auth, products, cart, checkout, staff, admin, vehicle, orders
+    shop/              Catalog and product detail pages
+    cart/              Cart page
+    checkout/          Checkout page
+    orders/            Private order confirmation
+    staff/             Employee and manager dashboard
+  components/          React UI grouped by cart, checkout, shop, staff, layout, ui
+  lib/                 Server services, validation, provider adapters, pure rules
+    auth/              Accounts, hashed sessions, roles, addresses, service area
+    cart/              Pricing and cart mutations
+    checkout/          Preview validation and demo tax
+    payments/          Stripe, idempotency, finalization, refunds, recovery
+    orders/            Order reads, queue, customer tracking data
+    delivery/          Batching, dispatch, vehicle assignment and departure
+    routing/           Stop ordering, Mapbox routes, route persistence
+    vehicle/           Vehicle location, stop transitions, simulator logic
+    notifications/     Notification messages, delivery, and retry state
+    catalog/           Catalog queries and sample data
+    inventory/         Inventory input validation
+    products/          Product validation
+    audit/             Staff change audit records
+    supabase/          Browser, server, and privileged database clients
+    api/               Shared API errors
+    db/                Database health checks
+scripts/               Delivery worker, recovery worker, robot simulator
+supabase/migrations/   Versioned schema and transactional database functions
+supabase/tests/        SQL rollback, inventory, and concurrency checks
+supabase/seed.sql       Local demo accounts and catalog
+e2e/                   Browser failure regressions with fixed provider responses
+e2e-live/              Real app, real local database, API and browser journeys
+docs/                  Architecture, API flows, testing, and presentation guides
+```
+
+Tests also live beside the code as `*.test.ts`, `*.test.tsx`, and `*.db.test.ts`. `src/proxy.ts` handles Supabase cookie refresh. OFS API authorization uses the custom sessions in `src/lib/auth`.
 
 ## Database
 

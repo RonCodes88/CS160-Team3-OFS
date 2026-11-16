@@ -8,6 +8,7 @@ export default defineConfig({
   outputDir: "./test-results",
   webServer: [{
     command: "npm run dev -- --port 3001",
+    env: { OFS_NEXT_DIST_DIR: ".next-browser" },
     url: "http://localhost:3001/cart",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

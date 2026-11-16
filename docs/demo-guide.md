@@ -4,9 +4,11 @@ OFS lets customers buy groceries online. Employees manage stock, managers manage
 
 ## Explain the architecture in 30 seconds
 
-Next.js serves the pages and API routes. Server-side TypeScript checks sessions, roles, and request input. PostgreSQL on Supabase stores customers, carts, payments, inventory, orders, and delivery state. PostGIS stores delivery locations. Stripe handles card details. Mapbox geocodes addresses and supplies road routes.
+OFS has three main parts. Customers use the storefront to shop and pay. Store employees and managers use the dashboard to keep stock and products up to date. Once an order is paid, the delivery engine groups it with nearby orders, plans a route, and assigns a simulated robot.
 
-The modules in `src/lib` define service boundaries inside one application. They are not independently deployed microservices. Inventory is stored in `products.stock_quantity`, rather than a separate inventory table.
+Stripe handles test payments. Mapbox provides address and road-route information. All three parts share the same order and inventory information, so the store and customer see consistent availability and purchase totals.
+
+Use the [README component diagram](../README.md#architecture) during this explanation. For technical questions, Next.js hosts the pages and API, PostgreSQL on Supabase stores data, and separate workers coordinate delivery and payment recovery. The modules in `src/lib` are service boundaries inside one application. Stock is stored in `products.stock_quantity`.
 
 ## Explain the core rules
 
@@ -56,7 +58,7 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 4. Show the confirmation totals and order snapshot.
 5. Sign in as an employee. Search inventory and update a quantity.
 6. Sign in as a manager. Edit a product, inspect the audit log, and explain retirement.
-7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. Tracking stays with Noah's separate work.
+7. Run `npm run delivery:worker -- --once` and `npm run robot:simulator` to show a paid order batched, routed, sent out, and delivered. The tracking API is implemented; the live map page remains a placeholder.
 
 ## Explain the testing in 30 seconds
 
@@ -71,3 +73,5 @@ Show `src/lib/auth/requireRole.ts`, `src/app/api/staff/inventory/route.ts`, and 
 The live suite only runs against a local database. It refuses any other address.
 
 Use a dedicated local test database for rehearsal. Never demonstrate a real charge. See [the black-box checklist](black-box-checklist.md) for acceptance checks.
+
+See [architecture and code ownership](architecture.md), [API flows](api-flows.md), and [demo rehearsal and coverage limits](testing.md) for more detail.
