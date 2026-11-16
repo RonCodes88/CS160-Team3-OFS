@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PATCH } from "./route";
 import { getSessionUser, type Role } from "@/lib/auth/session";
 import { updateDeliveryStopStatus } from "@/lib/vehicle/stopStatusService";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({})),
@@ -14,6 +15,10 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/vehicle/stopStatusService", () => ({
   updateDeliveryStopStatus: vi.fn(),
+}));
+
+vi.mock("@/lib/notifications/service", () => ({
+  sendNotificationsAfterResponse: vi.fn(),
 }));
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -131,6 +136,7 @@ describe("PATCH /api/vehicle/stops/[stopId]", () => {
         STOP_ID,
         status,
       );
+      expect(sendNotificationsAfterResponse).toHaveBeenCalledOnce();
     },
   );
 
@@ -140,6 +146,7 @@ describe("PATCH /api/vehicle/stops/[stopId]", () => {
     const response = await PATCH(request({ status: "ARRIVED" }), context());
 
     expect(response.status).toBe(404);
+    expect(sendNotificationsAfterResponse).not.toHaveBeenCalled();
   });
 
   it("returns 409 for an invalid status transition", async () => {
@@ -152,5 +159,6 @@ describe("PATCH /api/vehicle/stops/[stopId]", () => {
     const response = await PATCH(request({ status: "DELIVERED" }), context());
 
     expect(response.status).toBe(409);
+    expect(sendNotificationsAfterResponse).not.toHaveBeenCalled();
   });
 });

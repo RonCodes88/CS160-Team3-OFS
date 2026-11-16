@@ -21,7 +21,7 @@ npm run delivery:worker
 npm run recovery:worker
 ```
 
-Delivery checks every minute, routes eligible trips, and dispatches ROUTED trips when an active AVAILABLE vehicle exists. If no vehicle is available, the trip remains ROUTED for the next tick. Recovery handles pending payment finalization and queued notifications independently.
+Delivery checks every minute, routes eligible trips, and dispatches ROUTED trips when an active AVAILABLE vehicle exists. If no vehicle is available, the trip remains ROUTED for the next tick. Recovery handles pending payment finalization and queued notifications independently. Checkout and the robot's ARRIVED and DELIVERED updates also send queued notifications as soon as they respond, so those emails do not wait for the next recovery tick.
 
 Inspect logs and stop the containers:
 
@@ -76,7 +76,7 @@ Remote HTTPS test deployments require explicit opt-in:
 npm run robot:simulator -- --allow-remote --once
 ```
 
-Tracking remains with Noah's separate work.
+Customers watch the robot on `/track/<order-id>`, which refreshes every 15 seconds.
 
 ## Configure client-IP trust
 

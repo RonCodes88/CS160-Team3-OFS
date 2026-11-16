@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { errorResponse, internalErrorResponse } from "@/lib/api/errors";
 import { requireRole } from "@/lib/auth/requireRole";
 import { isUuid } from "@/lib/inventory/validation";
+import { sendNotificationsAfterResponse } from "@/lib/notifications/service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { updateDeliveryStopStatus } from "@/lib/vehicle/stopStatusService";
 
@@ -51,6 +52,10 @@ export async function PATCH(
 
       return errorResponse(409, "CONFLICT", "Invalid stop status transition.");
     }
+
+    // The update queued an "arrived" or "delivered" message. Send it now
+    // instead of waiting for the recovery worker's next tick.
+    sendNotificationsAfterResponse();
 
     return Response.json(
       { stop: result.stop, tripCompleted: result.tripCompleted },

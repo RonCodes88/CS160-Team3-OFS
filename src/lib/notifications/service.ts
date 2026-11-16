@@ -10,6 +10,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ProcessResult = { sent: number; failed: number };
 
+/** Email being switched off is expected locally, so it gets one plain line instead of a stack trace. */
+function reportSendError(err: unknown): void {
+  if (err instanceof Error && err.message === "NOTIFICATIONS_NOT_CONFIGURED") {
+    console.warn("Email is not configured, so notifications stay queued. See docs/run-workers.md.");
+    return;
+  }
+  console.error(err);
+}
+
 export const DEFAULT_BATCH_SIZE = 20;
 
 /**
@@ -60,7 +69,7 @@ export async function sendPendingNotifications(limit = DEFAULT_BATCH_SIZE): Prom
  */
 export function sendNotificationsAfterResponse(): void {
   try {
-    after(() => sendPendingNotifications().catch(console.error));
+    after(() => sendPendingNotifications().catch(reportSendError));
   } catch (err) {
     console.error(err);
   }
