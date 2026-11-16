@@ -73,3 +73,13 @@ describe("refund and memory bound", () => {
     expect(rl.hit("k10049").ok).toBe(false);
   });
 });
+
+describe("ipScope", () => {
+  it("uses the larger shared budget only when the client IP is unknown", async () => {
+    const { ipScope } = await import("./sharedRateLimit");
+    expect(ipScope("register", "unknown")).toBe("register-shared");
+    expect(ipScope("login", "unknown")).toBe("login-shared");
+    expect(ipScope("register", "203.0.113.9")).toBe("register-ip");
+    expect(ipScope("login", "203.0.113.9")).toBe("login-ip");
+  });
+});

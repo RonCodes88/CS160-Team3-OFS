@@ -17,9 +17,20 @@ const verify = (value: unknown = event) => {
 describe("Stripe payment webhook verification", () => {
   it.each(["payment_intent.amount_capturable_updated", "payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled"])(
     "accepts signed test event %s and returns identifiers only", (type) => {
-      expect(verify({ ...event, type })).toEqual({ eventId: "evt_test", type, paymentIntentId: "pi_test" });
+      expect(verify({ ...event, type, created: 1700000000 })).toEqual({
+        eventId: "evt_test", type, paymentIntentId: "pi_test", fromOfs: false, createdAtSeconds: 1700000000,
+      });
     },
   );
+  it("marks only intents carrying an OFS attempt ID as ours", () => {
+    const ours = { ...event, data: { object: { ...event.data.object, metadata: { attemptId: "a1" } } } };
+    expect(verify(ours)?.fromOfs).toBe(true);
+    const empty = { ...event, data: { object: { ...event.data.object, metadata: { attemptId: "" } } } };
+    expect(verify(empty)?.fromOfs).toBe(false);
+  });
+  it("treats an event without a timestamp as new", () => {
+    expect(verify()?.createdAtSeconds).toBeGreaterThan(Date.now() / 1000 - 60);
+  });
   it("rejects body changes after signing", () => {
     const body = JSON.stringify(event);
     expect(() => verifyPaymentWebhook(webhooks, body + " ", sign(body), secret)).toThrow("Invalid Stripe webhook signature or payload.");

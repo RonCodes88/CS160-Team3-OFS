@@ -51,8 +51,10 @@ function query(params: Record<string, string | number | null>): string {
   return search.toString();
 }
 
-export function fetchInventory(search: string, offset: number) {
-  return callApi<InventoryPage>(`/api/staff/inventory?${query({ q: search.trim(), limit: PAGE_SIZE, offset })}`);
+export function fetchInventory(search: string, offset: number, retired = false) {
+  return callApi<InventoryPage>(
+    `/api/staff/inventory?${query({ q: search.trim(), limit: PAGE_SIZE, offset, status: retired ? "retired" : null })}`,
+  );
 }
 
 export function fetchLowStock(threshold: number, offset: number) {
@@ -61,10 +63,11 @@ export function fetchLowStock(threshold: number, offset: number) {
   );
 }
 
-export function saveQuantity(productId: string, quantity: number) {
+/** `expectedQuantity` is the count on screen; the server refuses the save if it has changed. */
+export function saveQuantity(productId: string, quantity: number, expectedQuantity: number) {
   return callApi<QuantityChange>(`/api/staff/inventory/${productId}`, {
     method: "PUT",
-    body: JSON.stringify({ quantity }),
+    body: JSON.stringify({ quantity, expectedQuantity }),
   });
 }
 
@@ -81,6 +84,10 @@ export function updateProduct(productId: string, changes: Record<string, unknown
 
 export function retireProduct(productId: string) {
   return callApi<ProductChange>(`/api/admin/products/${productId}`, { method: "DELETE" });
+}
+
+export function reactivateProduct(productId: string) {
+  return callApi<ProductChange>(`/api/admin/products/${productId}/reactivate`, { method: "POST" });
 }
 
 export function fetchAuditLog(action: AuditAction | null, offset: number) {

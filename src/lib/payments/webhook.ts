@@ -12,7 +12,7 @@ export function verifyPaymentWebhook(
   rawBody: string,
   signature: string | null,
   endpointSecret: string | undefined,
-): { eventId: string; type: string; paymentIntentId: string } | null {
+): { eventId: string; type: string; paymentIntentId: string; fromOfs: boolean; createdAtSeconds: number } | null {
   if (!endpointSecret || !/^whsec_\S+$/.test(endpointSecret)) {
     throw new PaymentError(503, "WEBHOOK_NOT_CONFIGURED", "Stripe webhook verification is not configured.");
   }
@@ -37,5 +37,13 @@ export function verifyPaymentWebhook(
   }
   // Events can arrive out of order. Finalization must retrieve current Stripe state
   // and locate the persisted attempt by provider ID, not trust event metadata.
-  return { eventId: event.id, type: event.type, paymentIntentId: intent.id };
+  // OFS creates every intent with metadata.attemptId. An intent without it came
+  // from something else on the same Stripe account and can be acknowledged
+  // unprocessed. This only decides whether to look; it never supplies identity.
+  const fromOfs = typeof intent.metadata?.attemptId === "string" && intent.metadata.attemptId.length > 0;
+  return {
+    eventId: event.id, type: event.type, paymentIntentId: intent.id, fromOfs,
+    // Without a timestamp, treat the event as new so it is retried, not dropped.
+    createdAtSeconds: typeof event.created === "number" ? event.created : Math.floor(Date.now() / 1000),
+  };
 }

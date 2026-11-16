@@ -17,10 +17,12 @@ const created: TestProduct[] = [];
 test.beforeAll(async ({ browser }) => {
   // The dev server compiles each page on its first visit and may reload it
   // once. Open every page up front so the tests see settled pages.
+  // First compiles can be slow on a cold cache, so allow plenty of time.
+  test.setTimeout(240_000);
   const warmup = await browser.newPage();
   for (const path of ["/", "/shop", "/cart", "/login", "/register", "/staff", "/checkout"]) {
-    await warmup.goto(path);
-    await warmup.waitForLoadState("networkidle");
+    await warmup.goto(path, { timeout: 120_000 });
+    await warmup.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
   }
   await warmup.close();
 
@@ -213,6 +215,21 @@ test("an employee updates stock from the dashboard; only the manager sees the au
   const managerContext = await browser.newContext();
   const managerPage = await managerContext.newPage();
   await signIn(managerPage, SEEDED.manager, SEED_PASSWORD);
+  // The manager retires the product, finds it under Retired, and brings it back.
+  await managerPage.getByRole("searchbox").fill(product.sku);
+  await managerPage.keyboard.press("Enter");
+  // Wait for the search to narrow the list to this one product.
+  await expect(managerPage.getByLabel("Stock", { exact: true })).toHaveCount(1);
+  await managerPage.getByRole("button", { name: "Retire", exact: true }).click();
+  await managerPage.getByRole("button", { name: "Yes, retire" }).click();
+  await expect(managerPage.getByText(`${product.name} was retired.`)).toBeVisible();
+  await managerPage.getByRole("tab", { name: "Retired" }).click();
+  await managerPage.getByRole("searchbox").fill(product.sku);
+  await managerPage.keyboard.press("Enter");
+  await managerPage.getByRole("button", { name: `Reactivate ${product.name}` }).click();
+  await expect(managerPage.getByText(`${product.name} is back in the shop.`)).toBeVisible();
+  expect((await managerPage.request.get(`/api/products/${product.id}`)).status()).toBe(200);
+
   await managerPage.getByRole("tab", { name: "Audit log" }).click();
   await expect(managerPage.getByRole("tabpanel")).toContainText(product.name);
   await expect(managerPage.getByRole("tabpanel")).toContainText(SEEDED.employee);

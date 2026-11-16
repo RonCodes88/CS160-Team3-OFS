@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { PackageSearch, Plus, Search } from "lucide-react";
+import { ArchiveRestore, PackageSearch, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { CatalogCategory } from "@/lib/catalog/types";
 import { DEFAULT_LOW_STOCK_THRESHOLD, MAX_SEARCH_LENGTH } from "@/lib/inventory/validation";
-import { retire, saveStock, submitProduct, withItem, withoutItem } from "./inventoryActions";
+import { reactivate, retire, saveStock, submitProduct, withItem, withoutItem } from "./inventoryActions";
 import { InventoryRow } from "./InventoryRow";
 import { Notice, type NoticeValue } from "./Notice";
 import { ProductForm } from "./ProductForm";
@@ -15,8 +15,11 @@ import { fetchInventory, fetchLowStock, PAGE_SIZE, type InventoryItem, type Inve
 import { inputClass, smallButton } from "./styles";
 
 type Props = {
-  /** "all" lists every active product with search; "low" lists stock at or under a threshold. */
-  mode: "all" | "low";
+  /**
+   * "all" lists every active product with search; "low" lists stock at or
+   * under a threshold; "retired" lists retired products a manager can bring back.
+   */
+  mode: "all" | "low" | "retired";
   canManage: boolean;
   categories: readonly CatalogCategory[];
 };
@@ -38,7 +41,7 @@ export function InventoryPanel({ mode, canManage, categories }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const request = mode === "low" ? fetchLowStock(threshold, offset) : fetchInventory(search, offset);
+    const request = mode === "low" ? fetchLowStock(threshold, offset) : fetchInventory(search, offset, mode === "retired");
     void request.then((result) => {
       if (cancelled) return;
       if (result.ok) setPage(result.data);
@@ -75,6 +78,16 @@ export function InventoryPanel({ mode, canManage, categories }: Props) {
     setBusyId(null);
     const saved = result.item;
     if (saved) setPage((p) => withItem(p, saved));
+    // A refused save means the count on screen is out of date: show the real one.
+    else reload(() => setReloadKey((k) => k + 1));
+    setNotice(result.notice);
+  }
+
+  async function onReactivate(item: InventoryItem) {
+    setBusyId(item.productId);
+    const result = await reactivate(item);
+    setBusyId(null);
+    if (result.reactivated) setPage((p) => withoutItem(p, item.productId));
     setNotice(result.notice);
   }
 
@@ -166,12 +179,40 @@ export function InventoryPanel({ mode, canManage, categories }: Props) {
         <Card className="mt-6 text-center">
           <PackageSearch aria-hidden strokeWidth={2.5} className="mx-auto h-12 w-12" />
           <p className="mt-4 text-2xl">
-            {mode === "low" ? "Nothing is running low." : search ? "No products match that search." : "No products yet."}
+            {mode === "low"
+              ? "Nothing is running low."
+              : search
+                ? "No products match that search."
+                : mode === "retired"
+                  ? "No retired products."
+                  : "No products yet."}
           </p>
         </Card>
       ) : (
         <ul className={`mt-6 space-y-4 transition-opacity ${loading ? "opacity-50" : ""}`} aria-busy={loading}>
-          {items.map((item) => (
+          {items.map((item) => mode === "retired" ? (
+            <li
+              key={item.productId}
+              className={`flex flex-wrap items-center gap-4 rounded-wobbly-md border-2 border-pencil bg-white p-4 shadow-soft ${busyId === item.productId ? "pointer-events-none opacity-50" : ""}`}
+            >
+              <div className="min-w-48 flex-1">
+                <p className="font-heading text-xl">{item.name}</p>
+                <p className="text-base text-pencil/70">
+                  {item.sku} · {categoryNames[item.categoryId] ?? "Uncategorized"} · {item.stockQuantity} in stock
+                </p>
+              </div>
+              <button
+                type="button"
+                className={smallButton}
+                disabled={busyId === item.productId}
+                aria-label={`Reactivate ${item.name}`}
+                onClick={() => void onReactivate(item)}
+              >
+                <ArchiveRestore aria-hidden strokeWidth={2.5} className="h-4 w-4" />
+                Reactivate
+              </button>
+            </li>
+          ) : (
             <InventoryRow
               // Remount when the stock changes so the input shows the saved value.
               key={`${item.productId}:${item.stockQuantity}`}

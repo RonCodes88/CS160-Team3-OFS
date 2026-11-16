@@ -8,11 +8,12 @@ import { InventoryPanel } from "./InventoryPanel";
 
 export type StaffRole = "EMPLOYEE" | "MANAGER";
 
-type Tab = "inventory" | "low" | "audit";
+type Tab = "inventory" | "low" | "retired" | "audit";
 
 const TABS: { id: Tab; label: string; managerOnly: boolean }[] = [
   { id: "inventory", label: "Inventory", managerOnly: false },
   { id: "low", label: "Low stock", managerOnly: false },
+  { id: "retired", label: "Retired", managerOnly: true },
   { id: "audit", label: "Audit log", managerOnly: true },
 ];
 
@@ -67,7 +68,7 @@ export function StaffDashboard({ role, email, categories }: Props) {
           <InventoryPanel
             // A separate instance per tab so search and paging don't leak between them.
             key={tab}
-            mode={tab === "low" ? "low" : "all"}
+            mode={tab === "low" ? "low" : tab === "retired" && isManager ? "retired" : "all"}
             canManage={isManager}
             categories={categories}
           />

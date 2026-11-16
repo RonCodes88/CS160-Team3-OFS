@@ -5,8 +5,8 @@ import { listInventory } from "@/lib/inventory/service";
 import { parseInventoryQuery } from "@/lib/inventory/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// GET /api/staff/inventory?q=&limit=&offset=
-// Lists active products and their stock. Search matches name or SKU.
+// GET /api/staff/inventory?q=&limit=&offset=&status=
+// Lists active products and their stock (status=retired lists retired ones). Search matches name or SKU.
 // EMPLOYEE or MANAGER only.
 export async function GET(request: NextRequest) {
   try {
