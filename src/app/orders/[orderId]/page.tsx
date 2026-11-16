@@ -86,7 +86,7 @@ export default async function Page({ params }: PageProps<"/orders/[orderId]">) {
         </Card>
 
         <div className="flex flex-wrap gap-4">
-          <Button href="/track">Track my order</Button>
+          <Button href={`/track/${order.id}`}>Track my order</Button>
           <Button href="/shop" variant="secondary">Keep shopping</Button>
         </div>
       </div>

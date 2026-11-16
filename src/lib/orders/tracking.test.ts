@@ -36,6 +36,7 @@ const defaultReplies: Record<Table, Reply> = {
       customer_id: CUSTOMER,
       status: "OUT_FOR_DELIVERY",
       trip_id: TRIP,
+      location: point(-121.8945, 37.3361),
     },
     error: null,
   },
@@ -89,6 +90,7 @@ describe("customer tracking service", () => {
         longitude: -121.891,
         updatedAt: UPDATED,
       },
+      destination: { latitude: 37.3361, longitude: -121.8945 },
     });
 
     expect(from).toHaveBeenCalledTimes(4);
@@ -147,6 +149,7 @@ describe("customer tracking service", () => {
         estimatedArrival: null,
         route: null,
         robotLocation: null,
+        destination: null,
       },
     });
     expect(from).toHaveBeenCalledTimes(1);
@@ -181,6 +184,7 @@ describe("customer tracking service", () => {
         estimatedArrival: null,
         route,
         robotLocation: null,
+        destination: null,
       },
     });
     expect(from).toHaveBeenCalledTimes(3);
