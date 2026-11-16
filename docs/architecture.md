@@ -2,7 +2,29 @@
 
 OFS serves a single grocery store in Downtown San Jose. Next.js hosts the customer storefront, staff dashboard, and HTTP API. Background processes dispatch deliveries and reconcile incomplete payments. PostgreSQL on Supabase holds persistent state, with PostGIS for geographic data.
 
-The [README diagram](../README.md#architecture) shows deployment and provider boundaries. The service names in the project design correspond to modules in `src/lib`, rather than separate deployments. See [implementation decisions](implementation-decisions.md) for differences between the design and current implementation.
+The [README diagram](../README.md#architecture) explains the product components for a nontechnical audience. The diagram below shows the implementation and provider boundaries. The service names in the project design correspond to modules in `src/lib`, rather than separate deployments. See [implementation decisions](implementation-decisions.md) for differences between the design and current implementation.
+
+## Technical components
+
+```mermaid
+flowchart TD
+    Customer[Customer browser] --> Web[Next.js pages and React components]
+    Staff[Employee and manager browser] --> Web
+    Web --> API[Next.js API route handlers]
+    API --> Auth[Hashed sessions and role checks]
+    Auth --> Services[TypeScript service modules in src/lib]
+    Services --> DB[(Supabase PostgreSQL and PostGIS)]
+    Services --> Stripe[Stripe test payments]
+    Services --> Mapbox[Mapbox geocoding and road routing]
+    Stripe --> Webhook[Signed Stripe webhook]
+    Webhook --> Finalize[Shared payment finalization]
+    Services --> Finalize
+    Finalize --> DB
+    Delivery[Delivery worker] --> DB
+    Delivery --> Mapbox
+    Recovery[Payment recovery worker] --> Finalize
+    Robot[Simulated robot HTTP client] --> API
+```
 
 ## Follow a request through the code
 
