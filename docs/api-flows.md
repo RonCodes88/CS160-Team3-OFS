@@ -141,7 +141,7 @@ sequenceDiagram
         R->>API: PATCH /api/vehicle/stops/:id ARRIVED, then DELIVERED
         API->>DB: vehicle_update_delivery_stop
     end
-    C->>API: GET /api/orders/:id/tracking every 15 seconds
+    C->>API: GET /api/orders/:id/tracking every 5 seconds
 ```
 
 Each tick does four things in order:
@@ -159,7 +159,7 @@ The robot is an HTTP client with a VEHICLE account. It reads its trip, reports i
 
 A repeated `DELIVERED` for a stop the same robot already delivered returns success again. The simulator can therefore retry after a lost response without causing an error or a duplicate.
 
-Customers read progress through `GET /api/orders/:orderId/tracking`. It combines the order status, trip status, stop status, estimated arrival, route geometry, destination, and the robot's last location. The tracking page polls it every 15 seconds.
+Customers read progress through `GET /api/orders/:orderId/tracking`. It combines the order status, trip status, stop status, estimated arrival, route geometry, destination, and the robot's last location. The tracking page polls it every 5 seconds.
 
 ## Notifications
 

@@ -51,6 +51,16 @@ describe("startInAppWorkers", () => {
     expect(scheduled).toHaveLength(3);
   });
 
+  it.each([[undefined, 60000], [10000, 10000]])("repeats delivery batching after %s ms (default a minute)", async (deliveryIntervalMs, expected) => {
+    const { scheduled, setTimer } = fakeTimers();
+    const jobs: InAppJobs = { delivery: vi.fn(async () => {}), deliveryIntervalMs, description: ["a"] };
+    startInAppWorkers({ OFS_IN_APP_WORKERS: "true" }, { build: () => jobs, setTimer });
+    scheduled[0].run();
+    await flush();
+    expect(scheduled[1].ms).toBeGreaterThan(expected - 1000);
+    expect(scheduled[1].ms).toBeLessThanOrEqual(expected);
+  });
+
   it("logs a bad setting instead of crashing the website, and can start once it is fixed", () => {
     const { setTimer } = fakeTimers();
     expect(startInAppWorkers(ROBOT, { setTimer, build: () => { throw new Error("OFS_ROBOT_STEP_MS must be a whole number"); } })).toEqual([]);
@@ -86,15 +96,26 @@ describe("repeat", () => {
 
 describe("createInAppJobs", () => {
   it("builds only what is turned on", () => {
-    expect(Object.keys(createInAppJobs({ OFS_IN_APP_WORKERS: "true" })).sort()).toEqual(["delivery", "description", "recovery"]);
+    expect(Object.keys(createInAppJobs({ OFS_IN_APP_WORKERS: "true" })).sort()).toEqual(["delivery", "deliveryIntervalMs", "description", "recovery"]);
     const robotOnly = createInAppJobs(ROBOT);
     expect(robotOnly.delivery).toBeUndefined();
     expect(robotOnly.robot).toBeTypeOf("function");
     expect(robotOnly.robotPollMs).toBe(5000);
   });
 
+  it("checks for deliveries every minute unless a demo sets a shorter interval", () => {
+    const normal = createInAppJobs({ OFS_IN_APP_WORKERS: "true" });
+    expect(normal.deliveryIntervalMs).toBe(60000);
+    expect(normal.description[0]).toContain("every minute");
+    const demo = createInAppJobs({ OFS_IN_APP_WORKERS: "true", OFS_DELIVERY_TICK_SECONDS: "10" });
+    expect(demo.deliveryIntervalMs).toBe(10000);
+    expect(demo.description[0]).toContain("every 10 s");
+  });
+
   it.each<[Record<string, string>, string]>([
     [{ OFS_IN_APP_WORKERS: "true", OFS_DELIVERY_WAIT_MINUTES: "0" }, "positive minutes"],
+    [{ OFS_IN_APP_WORKERS: "true", OFS_DELIVERY_TICK_SECONDS: "1" }, "OFS_DELIVERY_TICK_SECONDS"],
+    [{ OFS_IN_APP_WORKERS: "true", OFS_DELIVERY_TICK_SECONDS: "90" }, "OFS_DELIVERY_TICK_SECONDS"],
     [{ OFS_IN_APP_ROBOT: "true" }, "email and password are required"],
     [{ ...ROBOT, OFS_ROBOT_BASE_URL: "http://example.com" }, "loopback"],
     [{ ...ROBOT, OFS_ROBOT_STEP_MS: "fast" }, "OFS_ROBOT_STEP_MS"],
