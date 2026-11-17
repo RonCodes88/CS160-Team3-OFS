@@ -65,6 +65,6 @@ The delivery worker checks immediately and then every minute. The oldest paid or
 
 Routing failure marks the trip `ROUTE_FAILED` and returns orders to the queue using their original paid times. Routed trips wait for an AVAILABLE vehicle. Departure atomically assigns the vehicle and changes order and trip state to `OUT_FOR_DELIVERY`. The simulated robot uses authenticated HTTP endpoints to report progress and location.
 
-Customers follow an order at `/track/<order-id>`. The page polls the tracking API every 15 seconds and shows the route, destination, and robot on a map. Rehearse the worker and robot separately using [the worker guide](run-workers.md).
+Customers follow an order at `/track/<order-id>`. The page polls the tracking API every 5 seconds and shows the route, destination, and robot on a map. Rehearse the worker and robot separately using [the worker guide](run-workers.md).
 
 See [API flows](api-flows.md#delivery-pipeline) for the delivery sequence and [the data model](data-model.md) for the tables involved.

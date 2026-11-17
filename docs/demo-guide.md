@@ -76,6 +76,18 @@ After payment, the order joins a trip within about two minutes. The simulated ro
 
 `OFS_DELIVERY_WAIT_MINUTES=1` shortens the 20-minute wait so one order leaves quickly. Explain that the production rule is 20 minutes. Run the jobs in only one copy of the site per database, and do not also start the worker scripts.
 
+For a short live demo, add these too. The map then appears about 15 seconds after payment, and the robot reaches the door about 20 seconds later:
+
+```text
+OFS_DELIVERY_WAIT_MINUTES=0.1
+OFS_DELIVERY_TICK_SECONDS=10
+OFS_ROBOT_POLL_MS=2000
+OFS_ROBOT_STEP_MS=2000
+OFS_ROBOT_ARRIVAL_WAIT_MS=10000
+```
+
+`OFS_DELIVERY_TICK_SECONDS` checks for orders every 10 seconds instead of every minute. Explain that the production rule is every minute. The tracking page refreshes every 5 seconds, so the robot moves a few points on each refresh.
+
 ## Explain the testing in 30 seconds
 
 | Layer | What it proves | Command |
