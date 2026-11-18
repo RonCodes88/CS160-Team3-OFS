@@ -1,13 +1,13 @@
 services:
   web:
+    init: true
     build:
       context: .
       target: dev
     ports:
       - "3000:3000"
     env_file:
-      - path: .env.local
-        required: false
+      - .env.local
     environment:
       # Reliable file watching on Docker Desktop bind mounts.
       WATCHPACK_POLLING: "true"

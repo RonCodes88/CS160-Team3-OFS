@@ -1,6 +1,6 @@
 # CS160 Team 3 — OFS
 
-Next.js 16 (TypeScript, Tailwind) + Supabase. **Everything runs in Docker**, so you don't need Node installed.
+Next.js 16 (TypeScript, Tailwind) + Supabase. The app runs in Docker, so testers do not need Node installed. The default setup connects to the Supabase project in `.env.local`; it does not create a database.
 
 ## Review and presentation
 
@@ -24,7 +24,7 @@ cd CS160-Team3-OFS
 cp .env.example .env.local
 ```
 
-**3. Fill in `.env.local`.** Each variable in `.env.example` has a comment saying where to get it (Supabase, Stripe **test mode**, Mapbox), or ask the team. Never commit `.env.local`.
+**3. Fill in `.env.local`.** Each variable in `.env.example` has a comment saying where to get it (Supabase, Stripe **test mode**, Mapbox), or ask the team. Never commit `.env.local`. For a tester handoff, use a dedicated test database with the repository migrations already applied. See [tester setup and credentials](docs/tester-setup.md).
 
 The server checks every variable when it starts (`src/lib/env.ts`). In development it prints a warning listing anything missing or malformed and still starts. A production server exits instead. Stripe live keys (`sk_live_`/`pk_live_`) and secret `sk.` Mapbox tokens in `NEXT_PUBLIC_` variables are always rejected.
 
@@ -35,6 +35,8 @@ docker compose up --build
 ```
 
 Open **http://localhost:3000**. The footer should say `Supabase: Connected · PostGIS <version>` (see [Database](#database)).
+
+Compose requires `.env.local` and reads it automatically. After changing it, run `docker compose up --build` again to recreate the container with the new values. To include delivery batching and the simulated robot in that same command, configure the `OFS_IN_APP_*` settings in the [tester guide](docs/tester-setup.md).
 
 ## Everyday use
 
@@ -50,11 +52,13 @@ Open **http://localhost:3000**. The footer should say `Supabase: Connected · Po
 
 Code changes reload automatically in the browser. Commands with `exec` need the app running (`docker compose up`) in another terminal.
 
-**After pulling changes that touch `package.json`**, rebuild once:
+**After pulling changes**, rebuild once:
 
 ```bash
-docker compose up --build --renew-anon-volumes
+docker compose up --build
 ```
+
+The development container checks the package manifests at startup and refreshes its private dependency volume when they change.
 
 ## Making changes
 
