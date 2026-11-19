@@ -4,7 +4,7 @@ Keep Stripe in test mode. Worker commands use `.env.local` unless environment va
 
 ## Start supervised workers
 
-Apply the repository migrations before deploying the app and workers. Use `npx supabase db push --dry-run` to inspect the linked project's pending migrations, then `npx supabase db push` to apply them.
+Docker Compose applies pending migrations from `OFS_DATABASE_URL` in `.env.local` before starting the app or workers. For deployments outside Compose, apply the repository migrations first. Use `npx supabase db push --dry-run` to inspect the linked project's pending migrations, then `npx supabase db push` to apply them.
 
 Start the local website and worker containers:
 

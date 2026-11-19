@@ -24,7 +24,7 @@ cd CS160-Team3-OFS
 cp .env.example .env.local
 ```
 
-**3. Fill in `.env.local`.** Each variable in `.env.example` has a comment saying where to get it (Supabase, Stripe **test mode**, Mapbox), or ask the team. Never commit `.env.local`. For a tester handoff, use a dedicated test database with the repository migrations already applied. See [tester setup and credentials](docs/tester-setup.md).
+**3. Place the supplied `.env.local` in the repository root.** If you are preparing it yourself, fill in `.env.example`, including `OFS_DATABASE_URL` for migrations, and save it as `.env.local`. Use a dedicated test database and Stripe **test mode**. Never commit `.env.local`. See [tester setup and credentials](docs/tester-setup.md).
 
 The server checks every variable when it starts (`src/lib/env.ts`). In development it prints a warning listing anything missing or malformed and still starts. A production server exits instead. Stripe live keys (`sk_live_`/`pk_live_`) and secret `sk.` Mapbox tokens in `NEXT_PUBLIC_` variables are always rejected.
 
@@ -35,6 +35,8 @@ docker compose up --build
 ```
 
 Open **http://localhost:3000**. The footer should say `Supabase: Connected · PostGIS <version>` (see [Database](#database)).
+
+Docker first runs a `migrate` container to apply pending migrations to `OFS_DATABASE_URL`. The app and workers wait for it to succeed. Already applied migrations are skipped. Startup never resets the database or reloads demo data. If migrations fail, fix the reported connection or SQL error and run the same command again.
 
 Compose requires `.env.local` and reads it automatically. After changing it, run `docker compose up --build` again to recreate the container with the new values. To include delivery batching and the simulated robot in that same command, configure the `OFS_IN_APP_*` settings in the [tester guide](docs/tester-setup.md).
 
@@ -243,7 +245,8 @@ PostgreSQL on Supabase, with **PostGIS** for delivery locations. PostGIS is enab
 
 - **Team access:** the project owner invites teammates from the Supabase dashboard → Organization settings → Team.
 - **Health check:** the footer shows `Supabase: Connected · PostGIS <version>` when the server can run a query with `SUPABASE_SECRET_KEY` (it calls `public.db_health()`). If it says `db_health() is missing`, the hosted database is behind on migrations.
-- **Apply migrations to the hosted project** (one person, after a migration PR merges):
+- **Docker installations:** migrations run automatically before the app starts, using `OFS_DATABASE_URL` from `.env.local`. No Supabase login, CLI installation, or manual database command is needed on the tester's machine. The connection must target the same project as the API URL and keys. Use a session pooler URL if the direct database address requires IPv6 unavailable on the tester's network.
+- **Apply migrations without Docker** (one person, after a migration PR merges):
   ```bash
   npx supabase login
   npx supabase link --project-ref <project-ref>   # from the dashboard URL
@@ -284,7 +287,8 @@ Ask the team before adding a new package. All of these are installed by `npm ci`
 
 - **`Supabase: Not configured`**: `.env.local` is missing or empty. Fill it in, then restart with `docker compose up`.
 - **Port 3000 already in use**: stop whatever else is running on 3000, or change `"3000:3000"` to `"3001:3000"` in `compose.yaml` and use http://localhost:3001.
-- **`Could not find the function/table/column ... in the schema cache`, or `relation "..." does not exist`**: your database is missing a migration. In DB tests or against local Supabase, run `npx supabase migration list --local`, then `npx supabase migration up --local`. Against the hosted project, someone needs to run `npx supabase db push` (see [Database](#database)).
+- **Migration container exits or the app never starts:** inspect `docker compose logs migrate`. Check that `OFS_DATABASE_URL` has the correct database password and points to the same project as the API keys, then run `docker compose up --build` again. Do not reset the database or repair migration history to bypass an error.
+- **`Could not find the function/table/column ... in the schema cache`, or `relation "..." does not exist`**: your database is missing a migration. For Docker, check the migration logs and confirm the database connection and API credentials target the same project. For a directly run local Supabase, run `npx supabase migration list --local`, then `npx supabase migration up --local`.
 - **`fetch failed` or `ECONNREFUSED 127.0.0.1:54321` in DB tests**: local Supabase isn't running. Start it with `npx supabase start`.
 - **Something is weird after pulling**: reset the container with `docker compose down` and then `docker compose up --build --renew-anon-volumes`.
 

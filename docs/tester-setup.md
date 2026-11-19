@@ -4,11 +4,12 @@ Install and start Docker Desktop with Docker Compose support. The default setup 
 
 ## Prepare the test environment
 
-The team should prepare a dedicated Supabase test project, apply every repository migration, and provision test accounts and a catalog before handing it to testers. Do not use a database containing data you need to preserve. The local demo accounts in `supabase/seed.sql` are created by local Supabase setup; connecting to a hosted project does not create those accounts automatically.
+The team should prepare a dedicated Supabase test project and provision test accounts and a catalog before handing it to testers. Docker applies pending repository migrations automatically on startup. The local demo accounts in `supabase/seed.sql` are created by local Supabase setup; connecting to a hosted project does not create those accounts automatically. Startup preserves existing catalog, account, and order data.
 
 Give trusted testers a completed `.env.local` through a password manager's secure sharing feature. Keep the file out of GitHub, issues, PRs, and screenshots. Include only credentials for the dedicated test environment:
 
 - Supabase URL, publishable key, and server secret key for that project.
+- `OFS_DATABASE_URL`, the PostgreSQL connection string for the same project. Use Supabase's Connect dialog and select the session pooler for networks without direct IPv6 access. Include the database password and percent-encode reserved characters. API keys cannot replace this credential.
 - Matching Stripe test secret and publishable keys.
 - Stripe webhook signing secret for the listener or endpoint being tested.
 - Mapbox server and public tokens. Allow `http://localhost:3000` on the public token.
@@ -23,14 +24,15 @@ Never send production keys. Keep `OFS_EMAIL_PROVIDER=disabled` unless email deli
 ```sh
 git clone https://github.com/RonCodes88/CS160-Team3-OFS.git
 cd CS160-Team3-OFS
-cp .env.example .env.local
 ```
 
-Replace the placeholders in `.env.local` with the test credentials, then run:
+Save the team's supplied env file as `.env.local` in this directory, then run:
 
 ```sh
 docker compose up --build
 ```
+
+No host Node installation, Supabase login, or manual migration step is required. The `migrate` service finishes before the app starts. It applies only pending migrations using Supabase's migration history. A connection or SQL error blocks startup with a message in `docker compose logs migrate`; retry the same startup command after correcting the problem. It never resets the database or reruns the demo seed.
 
 Open http://localhost:3000. Check the footer's database connection, browse the catalog, and sign in using the accounts supplied by the team. A page loading alone does not prove the database or provider credentials work.
 
@@ -80,4 +82,4 @@ docker compose down
 
 This is optional and requires Node 24 on the host to run the repository's Supabase CLI. Run `npm ci` and `npx supabase start` on the host. Supabase applies the migrations and local seed. Run `npx supabase status` to obtain the local keys, then put those keys in `.env.local`.
 
-For Docker Desktop, set `NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:54321` so the app container can reach Supabase on the host. Container loopback points at the app container itself. On Linux Docker Engine, configure a host gateway mapping for `host.docker.internal` before using this URL. Use the hosted setup above for a handoff requiring only Docker Desktop and one startup command.
+For Docker Desktop, set `NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:54321` and `OFS_DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:54322/postgres?sslmode=disable` so the containers can reach Supabase on the host. Container loopback points at the app container itself. On Linux Docker Engine, configure a host gateway mapping for `host.docker.internal` before using these URLs. Use the hosted setup above for a handoff requiring only Docker Desktop and one startup command.

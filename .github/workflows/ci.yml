@@ -25,6 +25,7 @@ jobs:
 
       - run: npm ci
       - run: sh scripts/test-docker-entrypoint.sh
+      - run: node --test scripts/db-migrate.test.mjs
       - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
@@ -91,6 +92,11 @@ jobs:
           echo "::add-mask::$SECRET_KEY"
           echo "SUPABASE_TEST_URL=$API_URL" >> "$GITHUB_ENV"
           echo "SUPABASE_TEST_SECRET_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
+
+      - name: Verify fresh install and repeated migrations preserve data
+        env:
+          OFS_MIGRATION_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/ofs_install_check?sslmode=disable
+        run: sh scripts/test-install-migrations.sh
 
       - run: npm run test:db
       - name: Verify database transaction rollback
