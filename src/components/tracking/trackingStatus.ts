@@ -6,8 +6,8 @@ import type { CustomerTracking } from "@/lib/orders/tracking";
 
 export type LngLat = [longitude: number, latitude: number];
 
-/** How often the page asks the server for fresh tracking data. */
-export const POLL_MS = 15_000;
+/** How often the page asks the server for fresh tracking data. Short enough that the robot visibly moves. */
+export const POLL_MS = 5_000;
 
 export const STATUS_STEPS = [
   { status: "PAID", label: "Paid" },

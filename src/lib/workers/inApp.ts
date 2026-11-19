@@ -18,7 +18,13 @@ type Env = Record<string, string | undefined>;
 type Job = () => Promise<void>;
 type SetTimer = (run: () => void, ms: number) => void;
 
-export type InAppJobs = { delivery?: Job; recovery?: Job; robot?: Job; robotPollMs?: number; description: string[] };
+export type InAppJobs = {
+  delivery?: Job; recovery?: Job; robot?: Job;
+  /** How often delivery batching runs. One minute unless a demo shortens it. */
+  deliveryIntervalMs?: number;
+  robotPollMs?: number;
+  description: string[];
+};
 
 const MINUTE = 60_000;
 const STARTED = Symbol.for("ofs.inAppWorkers.started");
@@ -58,6 +64,10 @@ export function createInAppJobs(env: Env): InAppJobs {
     const db = createAdminClient();
     const minutes = waitLimitMinutes(env.OFS_DELIVERY_WAIT_MINUTES);
     jobs.delivery = createDeliveryTick(db, minutes);
+    // The rule is "batching runs every minute". Demos can check more often so a
+    // paid order leaves within seconds; the batching rules themselves don't change.
+    const tickSeconds = whole(env, "OFS_DELIVERY_TICK_SECONDS", 60, 5, 60);
+    jobs.deliveryIntervalMs = tickSeconds * 1000;
 
     const payments = createRecoveryDependencies(db);
     let warnedEmailOff = false;
@@ -73,7 +83,8 @@ export function createInAppJobs(env: Env): InAppJobs {
         }
       }
     };
-    jobs.description.push(`delivery batching every minute (wait limit ${minutes} min)`, "payment recovery and email every minute");
+    const every = tickSeconds === 60 ? "every minute" : `every ${tickSeconds} s`;
+    jobs.description.push(`delivery batching ${every} (wait limit ${minutes} min)`, "payment recovery and email every minute");
   }
 
   if (env.OFS_IN_APP_ROBOT === "true") {
@@ -119,7 +130,7 @@ export function startInAppWorkers(
 
   const { setTimer } = options;
   if (jobs.delivery) {
-    repeat(jobs.delivery, { intervalMs: MINUTE, firstDelayMs: 5000, setTimer,
+    repeat(jobs.delivery, { intervalMs: jobs.deliveryIntervalMs ?? MINUTE, firstDelayMs: 5000, setTimer,
       onError: error => console.error("Delivery tick failed:", message(error)) });
   }
   if (jobs.recovery) {
