@@ -7,11 +7,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ---- deps: install node_modules from the lockfile ----
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci && sha256sum package.json package-lock.json > node_modules/.ofs-dependencies.sha256
+
+# ---- migrate: one-shot database setup, before web or workers start ----
+FROM deps AS migrate
+COPY supabase ./supabase
+COPY scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+CMD ["node", "scripts/db-migrate.mjs"]
 
 # ---- dev: hot-reloading dev server (used by docker compose) ----
 FROM deps AS dev
 COPY . .
+COPY scripts/docker-dev-entrypoint.sh /usr/local/bin/ofs-dev-entrypoint
+ENTRYPOINT ["sh", "/usr/local/bin/ofs-dev-entrypoint"]
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 

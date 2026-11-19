@@ -1,13 +1,23 @@
 services:
+  migrate:
+    build:
+      context: .
+      target: migrate
+    env_file: .env.local
+    init: true
+
   web:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    init: true
     build:
       context: .
       target: dev
     ports:
       - "3000:3000"
     env_file:
-      - path: .env.local
-        required: false
+      - .env.local
     environment:
       # Reliable file watching on Docker Desktop bind mounts.
       WATCHPACK_POLLING: "true"
@@ -18,6 +28,9 @@ services:
       - /app/.next
 
   delivery:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     profiles: [workers]
     build:
       context: .
@@ -28,6 +41,9 @@ services:
     command: ["npm", "run", "delivery:worker"]
 
   recovery:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     profiles: [workers]
     build:
       context: .
